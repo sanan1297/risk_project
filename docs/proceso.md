@@ -167,11 +167,33 @@ Los 4 primeros tienen sobrecosto real positivo. Rama Judicial tiene sobrecosto ~
 
 ### 5.1 Dataset `matriz.csv`
 
-**Ubicación:** `C:\Users\Santa\Documents\Tesis\Matrices\matriz.csv` (copia en `docs/matriz.csv`)
+**Ubicación original:** `C:\Users\Santa\Documents\Tesis\Matrices\matriz.csv` (copia en `docs/matriz.csv`)  
+**Versión normalizada:** `docs/matriz_clean.csv` — generada por `estudio_data/normalizar.py`
 
-Dataset de matrices de riesgo con datos de proyecto enriquecidos desde SECOP I. Un contrato tiene múltiples riesgos, cada uno con una fila independiente.
+El dataset original tiene 131 filas malformadas (padding/truncado a 20 columnas por mal quoting CSV) que se reparan automáticamente durante la normalización. El proceso NO modifica `matriz.csv`, solo lee de él y escribe `matriz_clean.csv`.
 
-### 5.2 Columnas
+### 5.2 Pipeline de Normalización
+
+`estudio_data/normalizar.py` aplica las siguientes transformaciones sobre `matriz.csv` para producir `matriz_clean.csv`:
+
+| # | Transformación | Detalle |
+|---|---|---|
+| 1 | Lowercase + tildes | `quitar_tildes()` + `.lower()` en todas las columnas textuales |
+| 2 | Espacios múltiples | `re.sub(r'\s+', ' ', s)` — colapsa espacios |
+| 3 | **clase** (82→22 vars) | Mapeo de 60+ patrones regex a taxonomía SECOP canónica |
+| 4 | **asignacion** (279→10 vars) | Mapa exacto + detección de entidades/contratistas + catch-all para textos descriptivos |
+| 5 | **tipo** (265→17 vars) | Patrones multi-riesgo, palabras clave, mapa exacto |
+| 6 | **etapa** (109→23 vars) | Patrones exactos + división de compuestos (`/`, `-`, `y`) con palabras clave |
+| 7 | **fuente_riesgo** (47→4 vars) | Mapeo a `interno`, `externo`, `mixto`, `no especificado` |
+| 8 | **probabilidad** (38→6 vars) | Escalas mixtas (0-1, 0-10, porcentual, textual) → 1-5 |
+| 9 | **impacto** (40→6 vars) | Idem probabilidad |
+| 10 | **categoria** (43→5 vars) | Textos → `bajo/medio/alto/extremo`; numéricos escalados con matriz estándar |
+| 11 | **valoracion** (47 vars) | Ratings textuales → numérico; decimales .0 → enteros |
+| 12 | Filas malformadas | Padding a 20 columnas si faltan, truncado si sobran |
+
+**Resultado:** 72,123 normalizaciones aplicadas, 131 filas reparadas, 0 tildes, 0 valores numéricos no normalizados.
+
+### 5.3 Columnas
 
 | # | Columna | Descripción |
 |---|---|---|
@@ -196,14 +218,21 @@ Dataset de matrices de riesgo con datos de proyecto enriquecidos desde SECOP I. 
 | 19 | `asignacion` | Asignación del riesgo |
 | 20 | `plan_mitigacion` | Plan de mitigación |
 
-### 5.3 Resumen del dataset
+### 5.4 Resumen del dataset
 
 | Métrica | Valor |
 |---|---|
-| Filas totales | 6,381 |
-| Contratos únicos | 343 |
-| Con URL `contratos.gov.co` (SECOP I) | 338 |
+| Filas totales | 6,525 |
+| Contratos únicos | 351 (C-001 a C-351) |
+| Riesgos por contrato | media 18.6, rango 3–58 |
+| Con URL `contratos.gov.co` (SECOP I) | 346 |
 | Con URL `community.secop.gov.co` (SECOP II) | 5 |
+| Promedio sobrecosto | +27.53% (todos ≥ 0%) |
+| Máximo sobrecosto | +808.76% (C-143, posible outlier) |
+| Categorías residuales | 0 (solo bajo/medio/alto/extremo/no especificado) |
+| Normalizaciones aplicadas | 72,123 en 9 campos categóricos |
+| Tildes en el dataset | 0 |
+| Valores vacíos categóricos | 0 (todos → "no especificado") |
 
 ---
 
@@ -211,7 +240,8 @@ Dataset de matrices de riesgo con datos de proyecto enriquecidos desde SECOP I. 
 
 El dataset `matriz.csv` se construyó fuera del pipeline del repositorio. Para cada URL en `proyectos_secop1_lite.csv` se navegó al portal de contratos.gov.co, se descargó el PDF de la matriz de riesgos, y se extrajeron los campos estructurados (descripción, probabilidad, impacto, valoración, categoría, asignación, plan de mitigación) mediante LLM (DeepSeek Flash V4 como extractor principal, Gemini Standard Flash como validador, Google Lens API para OCR en PDFs escaneados).
 
-**Archivo resultante:** `Tesis/Matrices/matriz.csv` — 6,381 filas, 20 columnas (copia en `docs/matriz.csv`).
+**Archivo resultante:** `Tesis/Matrices/matriz.csv` — 6,525 filas, 20 columnas (copia en `docs/matriz.csv`).  
+**Versión normalizada:** `docs/matriz_clean.csv` (131 filas con campos corridos por falta de quoting CSV fueron reparadas; 72,123 normalizaciones aplicadas por `estudio_data/normalizar.py`). El notebook de análisis (`estudio_data/matriz_inicial.ipynb`) usa esta versión.
 
 ---
 
@@ -224,9 +254,13 @@ risk_project/
 ├── depurar.py                     # Lee cache, normaliza, filtra, exporta CSV final
 ├── separar_fuentes.py             # Divide depurados en SECOP I y SECOP II, elimina duplicados por URL en SECOP I
 ├── excel_lite.py                  # Versión reducida; SECOP I lite solo con sobrecosto > 0
+├── estudio_data/
+│   ├── normalizar.py              # Pipeline de normalización (lee matriz.csv, escribe matriz_clean.csv)
+│   └── matriz_inicial.ipynb       # EDA con 29 celdas (distribuciones, correlaciones, conclusiones)
 ├── docs/
 │   ├── proceso.md                 # Este documento
-│   └── matriz.csv                 # Dataset enriquecido (6,381 filas, 20 cols) — 350 contratos, ~6,800 riesgos
+│   ├── matriz.csv                 # Dataset original enriquecido (6,525 filas, 20 cols) — 351 contratos
+│   └── matriz_clean.csv           # Versión normalizada (131 filas reparadas, 72,123 normalizaciones)
 └── contratos/
     ├── secop1_cache.csv           # Cache RAW SECOP I (35,233 registros) — excluido de git
     ├── secop2_cache.csv           # Cache RAW SECOP II (16,298 registros) — excluido de git
@@ -237,19 +271,19 @@ risk_project/
 
 Tesis/
 └── Matrices/
-    └── matriz.csv                  # Dataset original (6,381 filas, 20 cols) — fuente primaria de docs/matriz.csv
+    └── matriz.csv                  # Dataset original (6,525 filas, 20 cols) — fuente primaria de docs/matriz.csv
 ```
 
 ---
 
 ## 8. Pendiente / Próximos Pasos
 
-1. **Feature engineering**: agregar ~6,800 riesgos en ~343 filas por contrato (cantidad de riesgos, promedios de probabilidad/impacto, proporciones por tipo/asignación, dummies por categoría)
-2. **EDA** del dataset agregado
+1. **Feature engineering**: agregar ~6,525 riesgos en 351 filas por contrato (cantidad, promedios, proporciones por tipo/asignación, dummies por categoría, métricas de texto)
+2. **EDA complementario** sobre el dataset agregado
 3. **Modelo baseline**: Random Forest con validación cruzada anidada
 4. **Modelo campeón**: XGBoost con optimización de hiperparámetros
 5. **Interpretabilidad**: SHAP values
-6. **Prototipo**: Streamlit dashboard
+6. **Prototipo**: Streamlit dashboard para predicción interactiva de sobrecosto
 7. **Validación**: 1-3 casos de estudio reales
 
 ---
@@ -266,3 +300,5 @@ Tesis/
 | 2026-06-26 | v6 | Enriquecimiento de `matriz.csv` (Tesis/Matrices/) con `url` y `objeto` desde SECOP I lite mediante join por `valor_final`. 1,522/1,526 filas con match. Nueva sección 5 en proceso.md |
 | 2026-06-26 | v7 | Investigación SECOP II: se verificó que el API de datos.gov.co no expone columnas de adiciones/sobrecosto. Se intentó scraping (ReCaptcha), búsqueda de datasets alternativos y cruce con otras fuentes. Solo **5 registros** con sobrecosto real. Decisión: **el dataset base es SECOP I** (4,723 registros, 1,560 con sobrecosto > 0). SECOP II se incluye como complemento menor (5 registros). Documentado en sección 4.4 |
 | 2026-07-06 | v8 | Limpieza del repositorio: eliminados 9 archivos muertos (scripts v1, CSVs/xlsx regenerables, duplicados). Creado `.gitignore`. Los 5 contratos SECOP II se mapearon desde `docs/matriz.csv` — 5 noticeUIDs con URL `community.secop.gov.co` encontrados en `matriz.csv` y ubicados en `secop2_cache.csv` por `urlproceso`. Sección 4.4 actualizada con la tabla corregida. Archivo `secop2_con_sobrecosto.csv` reconstruido con 5 contratos + 1 excluido por sobrecosto negativo |
+| 2026-07-06 | v9 | Auditoría y corrección de `docs/matriz.csv`: 129 filas (9 contratos) tenían 18-21 campos por mal quoting CSV. Se creó `docs/matriz_clean.csv` con padding/truncado a 20 columnas, preservando 344 contratos. Notebook `matriz_inicial.ipynb` actualizado para usar la versión clean. Sección 5 y 7 actualizadas |
+| 2026-07-06 | v10 | Normalización exhaustiva del dataset: `estudio_data/normalizar.py` con 72,123 normalizaciones en 9 campos categóricos. clase (82→22), asignacion (279→10), tipo (265→17), etapa (109→23), fuente_riesgo (47→4), probabilidad (38→6), impacto (40→6), categoria (43→5), valoracion (47 vars). Dataset final: 351 contratos, 6,525 filas, 0 tildes, 0 categóricas residuales. Documento y conclusiones del notebook actualizados |
