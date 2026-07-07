@@ -278,13 +278,14 @@ Tesis/
 
 ## 8. Pendiente / Próximos Pasos
 
-1. **Feature engineering**: agregar ~6,525 riesgos en 351 filas por contrato (cantidad, promedios, proporciones por tipo/asignación, dummies por categoría, métricas de texto)
-2. **EDA complementario** sobre el dataset agregado
-3. **Modelo baseline**: Random Forest con validación cruzada anidada
-4. **Modelo campeón**: XGBoost con optimización de hiperparámetros
-5. **Interpretabilidad**: SHAP values
-6. **Prototipo**: Streamlit dashboard para predicción interactiva de sobrecosto
-7. **Validación**: 1-3 casos de estudio reales
+1. ~~Feature engineering: agregar ~6,525 riesgos en 351 filas por contrato~~ ✅ `contratos_features.csv`
+2. ~~Feature reduction: top 30 por RF importance + control variables~~ ✅ `contratos_features_reducido.csv`
+3. ~~Benchmarking v1 (219 vars): Ridge campeón 0.074, todos evaluados~~ ✅ `modelado.ipynb`
+4. ~~Benchmarking v2 (33 vars): Ridge campeón R² 0.103, GPU XGBoost probado~~ ✅ `modelado_v2.ipynb`
+5. ~~Optimizaciones: log-target + interacciones descartadas (empeoran R²)~~ ✅ `modelado_v2.ipynb` sección 11
+6. ~~Interpretación de coeficientes Ridge: top features identificadas~~ ✅ `modelo.md`
+7. **Prototipo**: Streamlit dashboard para predicción interactiva de sobrecosto
+8. **Validación**: 1-3 casos de estudio reales
 
 ---
 
@@ -302,3 +303,4 @@ Tesis/
 | 2026-07-06 | v8 | Limpieza del repositorio: eliminados 9 archivos muertos (scripts v1, CSVs/xlsx regenerables, duplicados). Creado `.gitignore`. Los 5 contratos SECOP II se mapearon desde `docs/matriz.csv` — 5 noticeUIDs con URL `community.secop.gov.co` encontrados en `matriz.csv` y ubicados en `secop2_cache.csv` por `urlproceso`. Sección 4.4 actualizada con la tabla corregida. Archivo `secop2_con_sobrecosto.csv` reconstruido con 5 contratos + 1 excluido por sobrecosto negativo |
 | 2026-07-06 | v9 | Auditoría y corrección de `docs/matriz.csv`: 129 filas (9 contratos) tenían 18-21 campos por mal quoting CSV. Se creó `docs/matriz_clean.csv` con padding/truncado a 20 columnas, preservando 344 contratos. Notebook `matriz_inicial.ipynb` actualizado para usar la versión clean. Sección 5 y 7 actualizadas |
 | 2026-07-06 | v10 | Normalización exhaustiva del dataset: `estudio_data/normalizar.py` con 72,123 normalizaciones en 9 campos categóricos. clase (82→22), asignacion (279→10), tipo (265→17), etapa (109→23), fuente_riesgo (47→4), probabilidad (38→6), impacto (40→6), categoria (43→5), valoracion (47 vars). Dataset final: 351 contratos, 6,525 filas, 0 tildes, 0 categóricas residuales. Documento y conclusiones del notebook actualizados |
+| 2026-07-07 | v11 | Feature engineering completo: `contratos_features.csv` (219 features, 351 contratos). Feature reduction: top 30 por RF importance + anio/ipc/trm → `contratos_features_reducido.csv`. Benchmarking v2 con 33 features: Ridge campeón (R² 0.103, RMSE 15.6, <1s). GPU XGBoost probado con `device='cuda'`. Optimizaciones (log-target, interacciones, limpieza de coefs) descartadas por empeorar R². Documento `docs/modelo.md` creado con resultados completos |
