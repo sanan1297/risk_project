@@ -264,14 +264,16 @@ IPC_TRM = {
 
 with st.sidebar:
     st.markdown("### :material/tune: Parámetros IPC / TRM")
+    editable = view == "predict"
     anio_sel = st.selectbox(
         "Año del contrato",
         [None] + RANGO_ANOS,
         format_func=lambda x: "Seleccionar..." if x is None else str(x),
+        disabled=not editable,
     )
     def_val = IPC_TRM.get(anio_sel, {}) if anio_sel else {}
-    ipc_val = st.number_input("IPC (%)", value=def_val.get("ipc"), step=0.01, format="%.2f")
-    trm_val = st.number_input("TRM (COP/USD)", value=def_val.get("trm"), step=1.0, format="%.0f")
+    ipc_val = st.number_input("IPC (%)", value=def_val.get("ipc"), step=0.01, format="%.2f", disabled=not editable)
+    trm_val = st.number_input("TRM (COP/USD)", value=def_val.get("trm"), step=1.0, format="%.0f", disabled=not editable)
     if anio_sel and anio_sel in IPC_TRM:
         st.caption(f":material/auto_awesome: Datos precargados")
     elif anio_sel and anio_sel not in IPC_TRM:
@@ -912,7 +914,8 @@ def _render_predict():
                 df_orig = pd.read_csv(io.StringIO(texto_csv))
                 st.info(f"{len(df_orig)} riesgos · {df_orig['id_contrato'].nunique()} contratos")
                 ready = True
-            except Exception:
+            except Exception as e:
+                st.error(f":material/error: No se pudo interpretar el texto como CSV: {e}")
                 ready = False
 
     _, btn_col, _ = st.columns([2.5, 1, 2.5])
@@ -1020,6 +1023,25 @@ def _render_history():
                                     pass
                         if h.get("notas"):
                             st.caption(f":material/note: {h['notas']}")
+                        if h.get("sobrecosto_real") is None:
+                            vcols = st.columns([1, 1.5, 2, 1])
+                            with vcols[0]:
+                                st.caption("Validar:")
+                            with vcols[1]:
+                                v_real = st.number_input("Real %", key=f"vr_{hid}", min_value=0.0, max_value=500.0, step=0.1, format="%.1f", label_visibility="collapsed", placeholder="Real %")
+                            with vcols[2]:
+                                v_nota = st.text_input("Nota", key=f"vn_{hid}", label_visibility="collapsed", placeholder="Nota")
+                            with vcols[3]:
+                                if st.button("Guardar", key=f"vs_{hid}", type="primary", use_container_width=True):
+                                    try:
+                                        rr = requests.put(f"{API_URL}/history/{hid}", data={"sobrecosto_real": str(v_real), "notas": v_nota or ""}, timeout=10)
+                                        if rr.status_code == 200:
+                                            st.success("Validado", icon=":material/check:")
+                                            st.rerun()
+                                        else:
+                                            st.error(rr.text)
+                                    except Exception as e:
+                                        st.error(str(e))
 
                 if paginas > 1:
                     pcols = st.columns([1, 2, 1])

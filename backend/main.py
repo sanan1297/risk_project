@@ -28,6 +28,11 @@ RANGO_ANOS = list(range(2000, 2026))
 REQUIRED_COLS = ["id_contrato", "descripcion_riesgo", "probabilidad", "impacto", "tipo", "categoria"]
 
 
+@app.on_event("startup")
+def startup():
+    history.init()
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "rango_anos": RANGO_ANOS, **MODEL_META}

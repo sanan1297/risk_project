@@ -614,12 +614,84 @@ risk_project/
 5. ~~Optimizaciones: log-target + interacciones descartadas (empeoran R²)~~ ✅ `modelado_v2.ipynb` sección 11
 6. ~~Interpretación de coeficientes Ridge: top features identificadas~~ ✅ `modelo.md`
 7. ~~**Prototipo**: Streamlit dashboard para predicción interactiva de sobrecosto~~ ✅ Hecho
-8. **Validación**: 1-3 casos de estudio reales con sobrecosto real conocido
+8. ~~**Validación**: 5 contratos Grupo A (sanidad) + 5 contratos Grupo B (generalización)~~ ✅ `tests/plan_de_pruebas.md`
 9. **Mejoras potenciales**: autenticación, exportación a PDF, modo batch para múltiples contratos
+
+## 12. Pruebas de Validación
+
+### 12.1 Diseño de Pruebas
+
+Se diseñaron dos grupos de prueba para evaluar el modelo Ridge de 33 features:
+
+| Grupo | Propósito | Contratos | Origen |
+|---|---|---|---|
+| **A (Sanidad)** | Verificar que el pipeline produce predicciones consistentes y las alertas clasifican correctamente | C-001, C-010, C-017, C-043, C-128 | Del mismo dataset (`matriz_clean.csv`), seleccionados manualmente para cubrir distintos perfiles de riesgo |
+| **B (Generalización)** | Evaluar capacidad del modelo con datos no vistos durante el entrenamiento | C-360 a C-364 | Proporcionados por el asesor como contratos reales de 2019-2023 con sobrecosto conocido |
+
+Metodología: cada contrato se cargó manualmente vía "Pegar texto" en el frontend, con los parámetros IPC/TRM correspondientes a su año.
+
+### 12.2 Datos de Prueba
+
+Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `contratos_prueba.csv`.
+
+| Contrato | Año | Valor Inicial | Valor Final | Sobrecosto Real | Perfil |
+|---|---|---|---|---|---|
+| C-001 | 2018 | — | — | 28.6% | Medio |
+| C-010 | 2018 | — | — | 37.3% | Alto |
+| C-017 | 2019 | — | — | 53.1% | Muy Alto |
+| C-043 | 2021 | — | — | 2.2% | Muy Bajo |
+| C-128 | 2019 | — | — | 30.4% | Medio-Alto |
+| C-360 | 2019 | $1,888M | $2,080M | 10.14% | — |
+| C-361 | 2022 | $1,885M | $2,245M | 19.09% | — |
+| C-362 | 2021 | $1,877M | $1,959M | 4.38% | — |
+| C-363 | 2022 | $1,869M | $2,004M | 7.20% | — |
+| C-364 | 2023 | $1,868M | $2,258M | 20.83% | — |
+
+### 12.3 Resultados Grupo A — Prueba de Sanidad
+
+| Contrato | Real | Ridge | Error | Prob. Alerta | Alerta | ¿Acierta? |
+|---|---|---|---|---|---|---|
+| C-001 | 28.6% | 30.32% | +1.7 pp | 80.9% | 🔴 ALTO RIESGO | ✅ |
+| C-010 | 37.3% | 17.69% | −19.6 pp | 26.2% | 🟢 RIESGO MODERADO | ❌ (falso negativo) |
+| C-017 | 53.1% | 31.99% | −21.1 pp | 79.8% | 🔴 ALTO RIESGO | ✅ (subestima pero alerta correcta) |
+| C-043 | 2.2% | 28.59% | +26.4 pp | 81.5% | 🔴 ALTO RIESGO | ❌ (falso positivo) |
+| C-128 | 30.4% | 27.99% | −2.4 pp | 57.9% | 🔴 ALTO RIESGO | ✅ |
+
+**MAE:** 14.2 pp  
+**Aciertos de alerta:** 3/5  
+**Conclusión:** El pipeline funciona correctamente. El modelo tiende a regresión a la media: subestima sobrecostos altos y sobreestima bajos.
+
+### 12.4 Validación contra Notebook
+
+El `modelo_final.ipynb` (entrenado con ~150+ features) difiere del modelo API (33 features en `FEATURES_33`). Las predicciones Ridge del API son sistemáticamente **−1 a −3.4 pp** menores que las del notebook, debido al feature set reducido.
+
+| Contrato | Notebook Ridge | API Ridge | Δ | Notebook Prob | API Prob | Δ |
+|---|---|---|---|---|---|---|
+| C-001 | 31.89% | 30.32% | −1.57 pp | 80.5% | 80.9% | +0.4 pp |
+| C-010¹ | 18.45% | 17.69% | −0.76 pp | 16.6% | 26.2% | +9.6 pp |
+| C-017 | 33.00% | 31.99% | −1.01 pp | 66.0% | 79.8% | +13.8 pp |
+| C-043 | 29.80% | 28.59% | −1.21 pp | 81.4% | 81.5% | +0.1 pp |
+| C-128 | 31.40% | 27.99% | −3.41 pp | 77.9% | 57.9% | −20.0 pp |
+
+> ¹ El notebook registra sobrecosto real = 1.82% para C-010. El usuario probó un contrato distinto con real = 37.3%.
+
+### 12.5 Resultados Grupo B — Prueba de Generalización
+
+| Contrato | Real | Ridge | Error | Prob. Alerta | Alerta |
+|---|---|---|---|---|---|
+| C-360 | 10.14% | 26.94% | +16.8 pp | 23.8% | 🟢 RIESGO MODERADO |
+| C-361 | 19.09% | 26.12% | +7.0 pp | 57.4% | 🔴 ALTO RIESGO |
+| C-362 | 4.38% | 17.53% | +13.2 pp | 20.3% | 🟢 RIESGO MODERADO |
+| C-363 | 7.20% | 21.72% | +14.5 pp | 32.2% | 🟢 RIESGO MODERADO |
+| C-364 | 20.83% | 15.85% | −5.0 pp | 14.0% | 🟢 RIESGO MODERADO |
+
+**MAE:** 11.3 pp (< 20 pp ✅)  
+**Tiempo de respuesta:** < 2s por contrato (< 5s ✅)  
+**Conclusión:** El modelo generaliza aceptablemente. Tiende a sobreestimar en contratos con sobrecosto real bajo (< 20%) y subestima en el único caso que excede el umbral (C-364: 20.83%).
 
 ---
 
-## 12. Historial de Cambios
+## 13. Historial de Cambios
 
 | Fecha | Versión | Cambio |
 |---|---|---|
@@ -635,3 +707,4 @@ risk_project/
 | 2026-07-06 | v10 | Normalización exhaustiva del dataset: `estudio_data/normalizar.py` con 72,123 normalizaciones en 9 campos categóricos. clase (82→22), asignacion (279→10), tipo (265→17), etapa (109→23), fuente_riesgo (47→4), probabilidad (38→6), impacto (40→6), categoria (43→5), valoracion (47 vars). Dataset final: 351 contratos, 6,525 filas, 0 tildes, 0 categóricas residuales. Documento y conclusiones del notebook actualizados |
 | 2026-07-07 | v11 | Feature engineering completo: `contratos_features.csv` (219 features, 351 contratos). Feature reduction: top 30 por RF importance + anio/ipc/trm → `contratos_features_reducido.csv`. Benchmarking v2 con 33 features: Ridge campeón (R² 0.103, RMSE 15.6, <1s). GPU XGBoost probado con `device='cuda'`. Optimizaciones (log-target, interacciones, limpieza de coefs) descartadas por empeorar R². Documento `docs/modelo.md` creado con resultados completos |
 | 2026-07-07 | v12 | **Prototipo funcional implementado.** Backend FastAPI con 7 endpoints. Frontend Streamlit con 3 vistas (Dashboard/Predicción/Historial). Feature engineering pipeline con preservación de `id_contrato`. Dashboard con 2 tabs (Uso + Entrenamiento) con KPI cards, gráficos Plotly, y datos reales. Predictor unificado (CSV/texto) con formulario de validación inline. Historial paginado (20 regs/pág) con navegación y spinners de carga. Arquitectura completa documentada con diagramas Mermaid. Código muerto limpiado. |
+| 2026-07-07 | v13 | **Pruebas de validación completadas.** 10 contratos (Grupo A sanidad + Grupo B generalización). MAE Grupo B: 11.3 pp. Validación contra notebook documenta diferencia de feature set (33 vs ~150 vars). Parámetros IPC/TRM bloqueados fuera de vista de predicción. Formulario de validación agregado al historial. BD poblada con valores reales. Plan de pruebas en `tests/plan_de_pruebas.md`. Sección 12 agregada a este documento. |
