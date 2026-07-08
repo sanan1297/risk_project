@@ -276,7 +276,336 @@ Tesis/
 
 ---
 
-## 8. Pendiente / Próximos Pasos
+## 8. Arquitectura del Prototipo
+
+### 8.1 Visión General
+
+```mermaid
+graph TB
+    subgraph Frontend["Frontend — Streamlit (frontend/streamlit_app.py)"]
+        DASH[Dashboard<br/>Uso del Modelo + Entrenamiento]
+        PRED[Predicción<br/>CSV / Texto]
+        HIST[Historial<br/>Paginado + Validación]
+    end
+
+    subgraph Backend["Backend — FastAPI (backend/)"]
+        API[main.py<br/>REST API]
+        FE[feature_engineering.py<br/>Agregación de riesgos]
+        PREDICT[predictor.py<br/>Modelo Ridge + Logistic]
+        HISTDB[history.py<br/>SQLite CRUD]
+        TRAIN[training_stats.py<br/>Estadísticas de entrenamiento]
+        LABELS[feature_labels.py<br/>Labels legibles]
+    end
+
+    subgraph Data["Datos Estáticos"]
+        M[MODELOS<br/>ridge_regressor.pkl<br/>logistic_model.pkl<br/>coeficientes_ridge.csv<br/>ipc_trm.pkl]
+        MAT[matriz_clean.csv<br/>6,525 riesgos<br/>351 contratos]
+    end
+
+    subgraph Storage["Almacenamiento Dinámico"]
+        DB[(history.db<br/>SQLite)]
+    end
+
+    Frontend -->|HTTP :8000| Backend
+    Backend --> Data
+    Backend -->|lectura/escritura| Storage
+```
+
+### 8.2 Backend API (`backend/`)
+
+Exposición REST con FastAPI en `http://localhost:8000`:
+
+| Método | Endpoint | Parámetros | Respuesta | Propósito |
+|--------|----------|-------------|-----------|-----------|
+| `POST` | `/predict` | CSV file o texto + parámetros `(anio, ipc, trm)` | `PrediccionSalida` con factores, alerta, history_id | Ejecutar predicción sobre 1+N contratos |
+| `GET` | `/history` | `page=1`, `page_size=20` | `{"data": [...], "total": N, "page": P, "paginas": M}` | Listar historial paginado |
+| `PUT` | `/history/{id}` | `sobrecosto_real`, `notas` (form) | `{"ok": true}` | Guardar validación (sobrecosto real observado) |
+| `DELETE` | `/history/{id}` | — | `{"ok": true}` | Eliminar una predicción del historial |
+| `DELETE` | `/history` | — | `{"ok": true}` | Limpiar todo el historial |
+| `GET` | `/stats/usage` | — | Agregados de `history.db` (total predicciones, % alto riesgo, serie temporal, etc.) | Dashboard de uso del modelo |
+| `GET` | `/stats/training` | — | Agregados de datos de entrenamiento + coeficientes del modelo | Dashboard de entrenamiento |
+
+### 8.3 Frontend — Vistas (Streamlit, `frontend/streamlit_app.py`)
+
+La app es single-page con navegación vía `?view=` en query params:
+
+| Vista | Ruta | Función | Contenido |
+|-------|------|---------|-----------|
+| Dashboard | `?view=dashboard` | `_render_dashboard()` | 2 tabs: "Uso del Modelo" (KPI cards, evolución, distribución alertas) y "Entrenamiento" (KPI cards, top features, tabla de riesgos por clase) |
+| Predicción | `?view=predict` | `_render_predict()` | Selector CSV/texto, parámetros en sidebar, procesamiento con spinner y cards de resultados |
+| Historial | `?view=history` | `_render_history()` | Lista paginada (20/page) con contrato, alerta, Ridge, Prob., Real, botón eliminar y formulario de validación inline |
+
+### 8.4 Flujo de Datos — Predicción
+
+```mermaid
+sequenceDiagram
+    participant U as Usuario
+    participant F as Streamlit
+    participant B as FastAPI
+    participant FE as feature_engineering
+    participant P as predictor
+    participant DB as history.db
+
+    U->>F: Sube CSV o pega texto
+    F->>F: Valida + calcula n_riesgos
+    U->>F: Click "Procesar"
+    F->>F: 🌀 spinner
+    F->>B: POST /predict (file + params)
+    B->>FE: aggregate_risks(df)
+    FE-->>B: features + id_contrato
+    B->>P: predict(features)
+    P-->>B: predicciones + factores
+    B->>DB: INSERT predicción
+    DB-->>B: history_id
+    B-->>F: PrediccionSalida
+    F->>F: 🌀 spinner done
+    F-->>U: Cards con resultado + factores
+    Note over F: Formulario "Registrar validación"<br/>para guardar sobrecosto real
+```
+
+### 8.5 Flujo de Datos — Dashboard
+
+```mermaid
+sequenceDiagram
+    participant U as Usuario
+    participant F as Streamlit
+    participant B as FastAPI
+    participant DB as history.db
+    participant Files as CSVs + PKLs
+
+    U->>F: Navega al Dashboard
+    F->>F: 🌀 spinner "Cargando estadísticas..."
+    F->>B: GET /stats/usage
+    B->>DB: SELECT COUNT, AVG, etc.
+    DB-->>B: agregados
+    B-->>F: total_predicciones, %alto_riesgo, serie_temporal, etc.
+    F->>F: Renderiza KPI cards + gráficos
+    F->>B: GET /stats/training
+    B->>Files: Lee matriz.csv, coeficientes_ridge.csv, ipc_trm.pkl
+    Files-->>B: datos
+    B-->>F: total_contratos, top_features, tabla_riesgos, etc.
+    F->>F: Renderiza KPI cards + tabla + bar chart
+    F-->>U: Dashboard completo
+```
+
+### 8.6 Flujo de Datos — Historial
+
+```mermaid
+sequenceDiagram
+    participant U as Usuario
+    participant F as Streamlit
+    participant B as FastAPI
+    participant DB as history.db
+
+    U->>F: Navega al Historial
+    F->>F: 🌀 spinner "Cargando historial..."
+    F->>B: GET /history?page=1&page_size=20
+    B->>DB: SELECT con LIMIT/OFFSET
+    DB-->>B: 20 registros + COUNT total
+    B-->>F: {data: [...], total: 120, pagina: 1, paginas: 6}
+    F->>F: Renderiza 20 tarjetas
+    F-->>U: Lista paginada con navegación ◀/▶
+    
+    U->>F: Click "Siguiente ▶"
+    F->>F: hist_page += 1
+    F->>B: GET /history?page=2&page_size=20
+    B-->>F: {data: [...], total: 120, pagina: 2}
+    F-->>U: Siguientes 20 registros
+    
+    U->>F: Ingresa sobrecosto real + "Guardar"
+    F->>B: PUT /history/{id} (form)
+    B->>DB: UPDATE
+    B-->>F: {ok: true}
+    F-->>U: ✅ Guardado
+```
+
+### 8.7 Pipeline Completo
+
+```mermaid
+graph LR
+    A[SECOP I API] --> B[unificar_secop.py]
+    B --> C[secop1_cache.csv]
+    C --> D[depurar.py]
+    D --> E[proyectos_depurados.csv]
+    E --> F[separar_fuentes.py]
+    F --> G[proyectos_secop1.csv]
+    G --> H[excel_lite.py]
+    H --> I[proyectos_secop1_lite.csv<br/>1,560 contratos]
+    I --> J[Extracción Matrices<br/>PDF → LLM → CSV]
+    J --> K[matriz.csv<br/>6,525 riesgos]
+    K --> L[normalizar.py]
+    L --> M[matriz_clean.csv<br/>351 contratos]
+    M --> N[Feature Engineering<br/>219 features → 33]
+    N --> O[Modelo Ridge<br/>R² 0.103]
+    O --> P[ridge_regressor.pkl<br/>coeficientes_ridge.csv]
+    P --> Q[FastAPI Backend<br/>/predict]
+    Q --> R[Streamlit Frontend<br/>Dashboard + Predicción]
+    R --> S[Usuario Final]
+    
+    style Q fill:#4facfe,stroke:#333,color:white
+    style R fill:#7B5CE4,stroke:#333,color:white
+    style S fill:#1ABC9C,stroke:#333,color:white
+```
+
+### 8.8 Arquitectura del Sistema
+
+```mermaid
+graph TB
+    subgraph Browser["Navegador"]
+        ST[Streamlit App<br/>puerto 8501]
+    end
+
+    subgraph Server["Servidor Local"]
+        FA[FastAPI<br/>puerto 8000]
+        
+        subgraph BackendMod["Módulos Backend"]
+            FE[feature_engineering.py]
+            PR[predictor.py]
+            H[history.py]
+            TS[training_stats.py]
+            FL[feature_labels.py]
+            SC[schemas.py]
+        end
+
+        subgraph DataFiles["Archivos de Datos"]
+            M1[models/ridge_regressor.pkl]
+            M2[models/logistic_model.pkl]
+            M3[models/coeficientes_ridge.csv]
+            M4[models/ipc_trm.pkl]
+            MD[docs/matriz_clean.csv]
+        end
+
+        subgraph Runtime["En Tiempo de Ejecución"]
+            DB[(history.db)]
+        end
+    end
+
+    Browser -->|HTTP :8501| ST
+    ST -->|HTTP :8000| FA
+    FA --> BackendMod
+    BackendMod --> DataFiles
+    BackendMod --> Runtime
+```
+
+### 8.9 Modelo de Datos — SQLite (`history.db`)
+
+```mermaid
+erDiagram
+    predicciones {
+        INTEGER id PK
+        TEXT created_at
+        TEXT id_contrato
+        INTEGER n_riesgos
+        INTEGER anio
+        REAL ipc
+        REAL trm
+        REAL prediccion_ridge
+        REAL probabilidad_alto_riesgo
+        TEXT alerta
+        TEXT factores_aumentan "JSON"
+        TEXT factores_disminuyen "JSON"
+        REAL sobrecosto_real
+        TEXT notas
+    }
+```
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| `id` | INTEGER (PK) | Auto-incremental |
+| `created_at` | TEXT | Timestamp ISO |
+| `id_contrato` | TEXT | Identificador del contrato |
+| `n_riesgos` | INTEGER | Cantidad de riesgos procesados |
+| `anio` | INTEGER | Año del análisis |
+| `ipc` | REAL | IPC del año |
+| `trm` | REAL | TRM del año |
+| `prediccion_ridge` | REAL | Sobrecosto estimado por Ridge |
+| `probabilidad_alto_riesgo` | REAL | Probabilidad de sobrecosto > 25% |
+| `alerta` | TEXT | `ALTO RIESGO` o `RIESGO MODERADO` |
+| `factores_aumentan` | TEXT (JSON) | Top factores que aumentan el sobrecosto |
+| `factores_disminuyen` | TEXT (JSON) | Top factores que disminuyen el sobrecosto |
+| `sobrecosto_real` | REAL | Valor real observado (validación) |
+| `notas` | TEXT | Notas de validación |
+
+---
+
+## 9. Funcionalidades del Prototipo
+
+### 9.1 Dashboard — Uso del Modelo
+
+- **KPI Cards:** Predicciones totales, Riesgos procesados, % Alto Riesgo, Sobrecosto Promedio
+  - Cada card tiene gradiente de color + badge con indicador ascendente/descendente
+  - Badge con fondo blanco y texto verde/rojo para máxima legibilidad
+- **Gráficos:**
+  - Evolución de predicciones (barras + línea de promedio)
+  - Distribución de alertas (bar chart: ALTO RIESGO vs RIESGO MODERADO)
+- **Spinner** de carga mientras se obtienen datos del backend
+
+### 9.2 Dashboard — Entrenamiento
+
+- **KPI Cards:** Contratos totales, Sobrecosto promedio/mediana, % Alto Riesgo, Riesgos en matriz, Contratos en matriz
+- **Tabla:** Top 10 coeficientes del modelo Ridge (positivos y negativos)
+- **Gráfico:** Distribución de riesgos por clase (bar chart horizontal)
+- **Spinner** de carga mientras se leen datos de entrenamiento
+
+### 9.3 Predicción de Sobrecosto
+
+- **Dos modos de entrada:**
+  - Subir CSV con columnas `id_contrato, descripcion_riesgo, probabilidad, impacto, tipo, categoria`
+  - Pegar texto CSV directamente
+- **Parámetros desde sidebar:** Año (2020-2026 con IPC/TRM automáticos), modo robusto
+- **Al procesar:** spinner + llamado a `/predict`
+- **Resultados por contrato:**
+  - Card oscura con: ID del contrato, sobrecosto estimado (color según gravedad), barra de probabilidad de alto riesgo, alerta con icono
+  - Factores que aumentan (verde) y disminuyen (rojo) el sobrecosto, con coeficientes
+  - Formulario de validación inline para guardar sobrecosto real observado
+
+### 9.4 Historial de Predicciones
+
+- **Lista paginada:** 20 registros por página
+- **Cada tarjeta muestra:** ID del contrato (con badge de alerta), fecha, n_riesgos, año, métricas (Ridge, Prob., Real), top factores, notas
+- **Navegación:** ◀ Anterior / Pág. X de Y · Mostrando registros 1–20 de 120 / Siguiente ▶
+- **Acciones:** Eliminar individual, Limpiar todo, Guardar validación
+- **Spinner** de carga mientras se obtiene el historial
+
+### 9.5 Experiencia de Usuario
+
+- Spinners en todas las operaciones asíncronas (procesar, cargar dashboard, cargar historial)
+- Encabezado con navegación tipo pestañas (Home / Predicción / Historial)
+- Selector de modo oscuro/claro en sidebar
+- Inputs con fondo blanco y texto negro para legibilidad
+- KPI cards con gradientes y badges legibles (fondo blanco + texto de color)
+
+---
+
+## 10. Archivos del Prototipo
+
+```
+risk_project/
+├── backend/
+│   ├── main.py                   # FastAPI REST API (7 endpoints)
+│   ├── schemas.py                # Pydantic models (FactorInfo, PrediccionSalida, PrediccionHistorial)
+│   ├── feature_engineering.py    # Agregación de riesgos → features del modelo
+│   ├── predictor.py              # Carga de modelos + predicción (Ridge + Logistic)
+│   ├── history.py                # CRUD SQLite + stats agregados
+│   ├── training_stats.py         # Estadísticas del dataset de entrenamiento
+│   └── feature_labels.py         # Labels legibles para features técnicas
+├── frontend/
+│   └── streamlit_app.py          # App Streamlit (~1050 líneas)
+├── models/
+│   ├── ridge_regressor.pkl       # Modelo Ridge final (R² 0.103)
+│   ├── logistic_model.pkl        # Clasificador binario (AUC 0.639)
+│   ├── coeficientes_ridge.csv    # Coeficientes del modelo para dashboard
+│   └── ipc_trm.pkl               # Diccionario IPC/TRM por año
+└── docs/
+    ├── proceso.md                # Este documento
+    ├── modelo.md                 # Resultados del modelo (R², RMSE, features)
+    ├── matriz.csv                # Dataset original de matrices de riesgo
+    └── matriz_clean.csv          # Versión normalizada
+```
+
+---
+
+## 11. Pendiente / Próximos Pasos
 
 1. ~~Feature engineering: agregar ~6,525 riesgos en 351 filas por contrato~~ ✅ `contratos_features.csv`
 2. ~~Feature reduction: top 30 por RF importance + control variables~~ ✅ `contratos_features_reducido.csv`
@@ -284,12 +613,13 @@ Tesis/
 4. ~~Benchmarking v2 (33 vars): Ridge campeón R² 0.103, GPU XGBoost probado~~ ✅ `modelado_v2.ipynb`
 5. ~~Optimizaciones: log-target + interacciones descartadas (empeoran R²)~~ ✅ `modelado_v2.ipynb` sección 11
 6. ~~Interpretación de coeficientes Ridge: top features identificadas~~ ✅ `modelo.md`
-7. **Prototipo**: Streamlit dashboard para predicción interactiva de sobrecosto
-8. **Validación**: 1-3 casos de estudio reales
+7. ~~**Prototipo**: Streamlit dashboard para predicción interactiva de sobrecosto~~ ✅ Hecho
+8. **Validación**: 1-3 casos de estudio reales con sobrecosto real conocido
+9. **Mejoras potenciales**: autenticación, exportación a PDF, modo batch para múltiples contratos
 
 ---
 
-## 9. Historial de Cambios
+## 12. Historial de Cambios
 
 | Fecha | Versión | Cambio |
 |---|---|---|
@@ -304,3 +634,4 @@ Tesis/
 | 2026-07-06 | v9 | Auditoría y corrección de `docs/matriz.csv`: 129 filas (9 contratos) tenían 18-21 campos por mal quoting CSV. Se creó `docs/matriz_clean.csv` con padding/truncado a 20 columnas, preservando 344 contratos. Notebook `matriz_inicial.ipynb` actualizado para usar la versión clean. Sección 5 y 7 actualizadas |
 | 2026-07-06 | v10 | Normalización exhaustiva del dataset: `estudio_data/normalizar.py` con 72,123 normalizaciones en 9 campos categóricos. clase (82→22), asignacion (279→10), tipo (265→17), etapa (109→23), fuente_riesgo (47→4), probabilidad (38→6), impacto (40→6), categoria (43→5), valoracion (47 vars). Dataset final: 351 contratos, 6,525 filas, 0 tildes, 0 categóricas residuales. Documento y conclusiones del notebook actualizados |
 | 2026-07-07 | v11 | Feature engineering completo: `contratos_features.csv` (219 features, 351 contratos). Feature reduction: top 30 por RF importance + anio/ipc/trm → `contratos_features_reducido.csv`. Benchmarking v2 con 33 features: Ridge campeón (R² 0.103, RMSE 15.6, <1s). GPU XGBoost probado con `device='cuda'`. Optimizaciones (log-target, interacciones, limpieza de coefs) descartadas por empeorar R². Documento `docs/modelo.md` creado con resultados completos |
+| 2026-07-07 | v12 | **Prototipo funcional implementado.** Backend FastAPI con 7 endpoints. Frontend Streamlit con 3 vistas (Dashboard/Predicción/Historial). Feature engineering pipeline con preservación de `id_contrato`. Dashboard con 2 tabs (Uso + Entrenamiento) con KPI cards, gráficos Plotly, y datos reales. Predictor unificado (CSV/texto) con formulario de validación inline. Historial paginado (20 regs/pág) con navegación y spinners de carga. Arquitectura completa documentada con diagramas Mermaid. Código muerto limpiado. |

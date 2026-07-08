@@ -12,5 +12,8 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Runtime artifacts
+*.db
+
 # Data evidence — tracked in git
 # contratos/*.csv y contratos/*.xlsx se suben como evidencia

@@ -3,7 +3,7 @@ DEPURAR DATASET UNIFICADO
 Lee los cache de SECOP I y II, normaliza correctamente,
 filtra solo proyectos terminados con URL, elimina columnas inutiles.
 """
-import pandas as pd, numpy as np, os, sys, ast, json
+import pandas as pd, numpy as np, os, sys, ast
 sys.stdout.reconfigure(encoding="utf-8")
 
 CARPETA = "contratos"

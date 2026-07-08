@@ -3,8 +3,7 @@ UNIFICAR SECOP I + SECOP II
 Proyectos de desarrollo: Obra + Inversion + Liquidado/Terminado + >= $500M
 Resultado: contratos/proyectos_unificados.csv
 """
-import pandas as pd, numpy as np, os, sys, json, ast, requests, time
-from datetime import datetime
+import pandas as pd, numpy as np, os, sys, ast, requests, time
 sys.stdout.reconfigure(encoding='utf-8')
 
 CARPETA = "contratos"
