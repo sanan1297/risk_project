@@ -30,24 +30,22 @@ El pipeline descarga contratos de obra pública desde las APIs de SECOP, extrae 
 ## Resultados del Modelo
 
 | Métrica | Valor |
-|---|---|
-| R² (CV anidada, 33 features) | 0.103 ± 0.080 |
-| RMSE (CV) | 15.6 ± 1.1 pp |
-| MAE (contratos de entrenamiento) | ~11 pp |
-| AUC (LogisticRegression CV) | ~0.70 |
-| Accuracy (clasificación binaria) | ~65% |
+|---|---|---|
+| R² (33 features) | 0.149 |
+| AUC (LogisticRegression CV) | 0.662 ± 0.026 |
+| RMSE | 16.0 pp |
 
 ### Pruebas de Validación (Julio 2026)
 
 **Grupo A — Sanidad (5 contratos del dataset):**
-- MAE: 14.2 pp
+- MAE: 14.3 pp
 - Aciertos de alerta: 3/5
 - El modelo tiende a regresión a la media (subestima sobrecostos altos, sobreestima bajos)
 
 **Grupo B — Generalización (5 contratos no vistos, 2019-2023):**
-- MAE: 11.3 pp (< umbral 20 pp ✅)
+- MAE: 11.4 pp (< umbral 20 pp ✅)
 - Tiempo de respuesta: < 2s por contrato
-- Conclusión: El modelo generaliza aceptablemente. Tiende a sobreestimar en contratos con sobrecosto real bajo.
+- Conclusión: El modelo generaliza aceptablemente. C-364 mejoró de −5.0 a −1.6 pp tras re-entreno.
 
 > Resultados detallados en [`tests/plan_de_pruebas.md`](tests/plan_de_pruebas.md) y [`docs/proceso.md`](docs/proceso.md#12-pruebas-de-validación).
 
