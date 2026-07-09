@@ -121,10 +121,13 @@ st.html(f"""
   .history-metric .label {{ font-size: 0.7rem; color: {MUTED}; }}
   .history-metric .value {{ font-size: 1rem; font-weight: 600; color: {TEXT_COLOR}; }}
   div[data-testid="column"]:nth-child(5) div[data-testid="column"] button {{
-    margin-top: -6px !important; padding: 0 4px !important; font-size: 13px !important; line-height: 1 !important; min-height: 0 !important; height: auto !important;
+    margin-top: 4px !important; padding: 0 2px !important; font-size: 13px !important; line-height: 1 !important; min-height: 0 !important; height: auto !important;
   }}
   div[data-testid="column"]:nth-child(5) div[data-testid="column"]:first-child button {{
-    margin-right: -10px !important;
+    margin-right: -14px !important;
+  }}
+  div[data-testid="column"]:nth-child(5) div[data-testid="column"]:last-child button {{
+    margin-left: -14px !important;
   }}
 
   /* RESULTADOS: forzar texto oscuro en tarjetas de predicción */
