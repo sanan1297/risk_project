@@ -37,7 +37,7 @@ IPC_TRM = {
 TOP_30_FEATURES = [
     "tfidf_desarrollo", "interaccion_prob_x_impacto", "tfidf_insumos",
     "prob_std", "tfidf_expedicion", "tfidf_materiales", "imp_promedio",
-    "tfidf_cualquier", "tfidf_ejecucion", "tfidf_contrato",
+    "tfidf_obra", "tfidf_ejecucion", "tfidf_contrato",
     "prop_tipo_operacional", "prob_promedio", "prop_cate_bajo",
     "valor_inicial", "tfidf_riesgo", "tfidf_tecnicas", "tfidf_municipio",
     "tfidf_obras", "tfidf_informacion", "prop_fuen_externo", "tfidf_cuando",

@@ -26,6 +26,7 @@ STOP_WORDS = [
     'estar', 'tener', 'hacer', 'poder', 'saber', 'nuestro', 'vuestra',
     'este', 'esta', 'estos', 'estas', 'ese', 'esa', 'esos', 'esas',
     'aquel', 'aquella', 'aquellos', 'aquellas',
+    'cualquier',
 ]
 
 
