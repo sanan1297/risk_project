@@ -120,7 +120,7 @@ st.html(f"""
   }}
   .history-metric .label {{ font-size: 0.7rem; color: {MUTED}; }}
   .history-metric .value {{ font-size: 1rem; font-weight: 600; color: {TEXT_COLOR}; }}
-  [class*="st-key-edit_"] button, [class*="st-key-del_"] button {{ margin-top: -10px !important; }}
+  [class*="st-key-edit_"] button, [class*="st-key-del_"] button {{ margin-top: -12px !important; }}
 
   /* RESULTADOS: forzar texto oscuro en tarjetas de predicción */
   .stContainer > div[data-testid="stVerticalBlockBorder"] .stMarkdown h3,
