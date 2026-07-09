@@ -120,7 +120,6 @@ st.html(f"""
   }}
   .history-metric .label {{ font-size: 0.7rem; color: {MUTED}; }}
   .history-metric .value {{ font-size: 1rem; font-weight: 600; color: {TEXT_COLOR}; }}
-  [class*="st-key-edit_"] button, [class*="st-key-del_"] button {{ margin-top: 10px !important; padding: 0 4px !important; min-height: 0 !important; height: auto !important; font-size: 13px !important; }}
 
   /* RESULTADOS: forzar texto oscuro en tarjetas de predicción */
   .stContainer > div[data-testid="stVerticalBlockBorder"] .stMarkdown h3,
@@ -963,7 +962,7 @@ def _render_history():
                     is_alto = "ALTO" in alerta
                     badge_color = "#EF4444" if is_alto else "#1ABC9C"
                     with st.container(border=True):
-                        hcols = st.columns([2.2, 1, 1, 1, 1])
+                        hcols = st.columns([2.2, 1, 1, 1, 0.5, 0.5])
                         with hcols[0]:
                             st.markdown(
                                 f'<span style="color: #000000; font-weight: bold; font-size: 1rem; margin-left:8px;">'
@@ -1001,21 +1000,18 @@ def _render_history():
                             st.markdown(f'<div class="history-metric"><div class="label" style="color:{MUTED};">Real</div><div class="value" style="color:{TEXT_COLOR};">{real_str}</div></div>', unsafe_allow_html=True)
                         with hcols[4]:
                             editando = st.session_state.get(f"editando_{hid}", False)
-                            st.markdown('<style>div[data-testid="column"]:nth-of-type(5) div[data-testid="column"]{gap:0!important}div[data-testid="column"]:nth-of-type(5) div[data-testid="column"] button{margin-top:10px!important;padding:0 4px!important;min-height:0!important;height:auto!important;font-size:13px!important}</style>', unsafe_allow_html=True)
-                            btn_sub = st.columns([0.4, 0.4], gap="small")
-                            with btn_sub[0]:
-                                if st.button(":material/edit:", key=f"edit_{hid}", help="Editar"):
-                                    st.session_state[f"editando_{hid}"] = not editando
-                                    st.rerun()
-                            with btn_sub[1]:
-                                if not editando:
-                                    if st.button(":material/delete:", key=f"del_{hid}", help="Eliminar"):
-                                        try:
-                                            rr = requests.delete(f"{API_URL}/history/{hid}", timeout=10)
-                                            if rr.status_code == 200:
-                                                st.rerun()
-                                        except Exception:
-                                            pass
+                            if st.button(":material/edit:", key=f"edit_{hid}", help="Editar"):
+                                st.session_state[f"editando_{hid}"] = not editando
+                                st.rerun()
+                        with hcols[5]:
+                            if not editando:
+                                if st.button(":material/delete:", key=f"del_{hid}", help="Eliminar"):
+                                    try:
+                                        rr = requests.delete(f"{API_URL}/history/{hid}", timeout=10)
+                                        if rr.status_code == 200:
+                                            st.rerun()
+                                    except Exception:
+                                        pass
                         if editando:
                             evcols = st.columns([1, 1.5, 2, 1])
                             with evcols[0]:
