@@ -829,31 +829,7 @@ def _mostrar_resultados(resp, df_original):
                     + '</div></div></div>',
                     unsafe_allow_html=True,
                 )
-            # --- Formulario de validación dentro del mismo contenedor oscuro ---
-            if hid:
-                st.write("")
-                st.markdown('<span style="color: #000000; font-weight: 600;">**:material/checklist: Registrar validación**</span>', unsafe_allow_html=True)
-                cols = st.columns([1, 1.5, 2, 1])
-                with cols[0]:
-                    st.markdown(f'<span style="color: #000000; margin-left:32px;">ID:</span> `{hid}`', unsafe_allow_html=True)
-                with cols[1]:
-                    real_val = st.number_input("Sobrecosto real (%)", key=f"real_{hid}", min_value=0.0, max_value=500.0, step=0.1, format="%.1f", label_visibility="collapsed", placeholder="Sobrecosto real %")
-                with cols[2]:
-                    notas = st.text_input("Notas", key=f"notas_{hid}", label_visibility="collapsed", placeholder="Notas opcionales")
-                with cols[3]:
-                    if st.button("Guardar", key=f"save_{hid}", type="primary", use_container_width=True):
-                        try:
-                            rr = requests.put(
-                                f"{API_URL}/history/{hid}",
-                                data={"sobrecosto_real": str(real_val), "notas": notas or ""},
-                                timeout=10,
-                            )
-                            if rr.status_code == 200:
-                                st.success(":material/check_circle: Guardado en el historial")
-                            else:
-                                st.error(f"Error: {rr.text}")
-                        except Exception as e:
-                            st.error(f"Error: {e}")
+            
                                                  
 def _render_predict():
     # ✅ CORRECCIÓN: CSS para forzar el color negro del st.radio
@@ -935,6 +911,7 @@ def _render_predict():
                     
     # CIERRE DE LA TARJETA
     st.markdown('</div></div>', unsafe_allow_html=True)
+    st.html('<div style="height: 64px;"></div>')
 # ─── HISTORIAL ─────────────────────────────────────────
 def _render_history():
     st.markdown(f'<div class="pred-card"><div style="font-size: 24px; font-weight: 700; color: #000000; margin-bottom: 15px;">Historial de Predicciones</div>', unsafe_allow_html=True)
@@ -1016,34 +993,37 @@ def _render_history():
                         with hcols[3]:
                             st.markdown(f'<div class="history-metric"><div class="label" style="color:{MUTED};">Real</div><div class="value" style="color:{TEXT_COLOR};">{real_str}</div></div>', unsafe_allow_html=True)
                         with hcols[4]:
-                            if st.button(":material/delete:", key=f"del_{hid}", help="Eliminar"):
-                                try:
-                                    rr = requests.delete(f"{API_URL}/history/{hid}", timeout=10)
+                            if st.button(":material/edit:", key=f"edit_{hid}", help="Editar"):
+                                st.session_state[f"editando_{hid}"] = not st.session_state.get(f"editando_{hid}", False)
+                                st.rerun()
+                        with hcols[4]:
+                            editando = st.session_state.get(f"editando_{hid}", False)
+                            if not editando:
+                                if st.button(":material/delete:", key=f"del_{hid}", help="Eliminar"):
+                                    try:
+                                        rr = requests.delete(f"{API_URL}/history/{hid}", timeout=10)
+                                        if rr.status_code == 200:
+                                            st.rerun()
+                                    except Exception:
+                                        pass
+                        if editando:
+                            evcols = st.columns([1, 1.5, 2, 1])
+                            with evcols[0]:
+                                st.caption("Real %:")
+                            with evcols[1]:
+                                ev_real = st.number_input("Real", key=f"evr_{hid}", min_value=0.0, max_value=500.0, step=0.1, format="%.1f", label_visibility="collapsed", placeholder="Real %")
+                            with evcols[2]:
+                                ev_nota = st.text_input("Nota", key=f"evn_{hid}", label_visibility="collapsed", placeholder="Nota")
+                            with evcols[3]:
+                                if st.button("Guardar", key=f"evs_{hid}", type="primary", use_container_width=True):
+                                    rr = requests.put(f"{API_URL}/history/{hid}", data={"sobrecosto_real": str(ev_real), "notas": ev_nota or ""}, timeout=10)
                                     if rr.status_code == 200:
+                                        st.session_state[f"editando_{hid}"] = False
                                         st.rerun()
-                                except Exception:
-                                    pass
+                                    else:
+                                        st.error(f"Error: {rr.text}")
                         if h.get("notas"):
                             st.caption(f":material/note: {h['notas']}")
-                        if h.get("sobrecosto_real") is None:
-                            vcols = st.columns([1, 1.5, 2, 1])
-                            with vcols[0]:
-                                st.caption("Validar:")
-                            with vcols[1]:
-                                v_real = st.number_input("Real %", key=f"vr_{hid}", min_value=0.0, max_value=500.0, step=0.1, format="%.1f", label_visibility="collapsed", placeholder="Real %")
-                            with vcols[2]:
-                                v_nota = st.text_input("Nota", key=f"vn_{hid}", label_visibility="collapsed", placeholder="Nota")
-                            with vcols[3]:
-                                if st.button("Guardar", key=f"vs_{hid}", type="primary", use_container_width=True):
-                                    try:
-                                        rr = requests.put(f"{API_URL}/history/{hid}", data={"sobrecosto_real": str(v_real), "notas": v_nota or ""}, timeout=10)
-                                        if rr.status_code == 200:
-                                            st.success("Validado", icon=":material/check:")
-                                            st.rerun()
-                                        else:
-                                            st.error(rr.text)
-                                    except Exception as e:
-                                        st.error(str(e))
 
                 if paginas > 1:
                     pcols = st.columns([1, 2, 1])
