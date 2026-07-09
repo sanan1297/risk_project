@@ -911,7 +911,7 @@ def _render_predict():
                     
     # CIERRE DE LA TARJETA
     st.markdown('</div></div>', unsafe_allow_html=True)
-    st.html('<div style="height: 48px;"></div>')
+    st.html('<div style="height: 30px;"></div>')
 # ─── HISTORIAL ─────────────────────────────────────────
 def _render_history():
     st.markdown(f'<div class="pred-card"><div style="font-size: 24px; font-weight: 700; color: #000000; margin-bottom: 15px;">Historial de Predicciones</div>', unsafe_allow_html=True)
