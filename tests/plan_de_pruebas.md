@@ -77,7 +77,7 @@ Los resultados completos están documentados en las secciones 6 y 7.
 Ejecutada el 2026-07-07. Todos los contratos se cargaron manualmente por el usuario vía "Pegar texto" en el frontend. Los valores Ridge y Prob. se tomaron de la respuesta de la API almacenada en `history.db`.
 
 | Contrato | Año | Real (%) | Ridge (API) | Error | Prob. (API) | Alerta | ¿Acierta? |
-|---|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|
 | C-001 | 2018 | 28.6 | 28.07% | −0.5 pp | 72.6% | 🔴 ALTO RIESGO | ✅ |
 | C-010 | 2018 | 37.3 | 17.31% | −20.0 pp | 23.6% | 🟢 RIESGO MODERADO | ❌ (subestimó) |
 | C-017 | 2019 | 53.1 | 31.25% | −21.9 pp | 77.3% | 🔴 ALTO RIESGO | ✅ (alerta acertada) |
