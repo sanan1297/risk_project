@@ -51,13 +51,7 @@ Correr `estudio_modelos/modelo_final.ipynb` con los 5 contratos del Grupo A. Ano
 
 ### Paso 3: Comparar y documentar
 
-| Contrato | Tipo | Real (%) | Ridge (Notebook) | Ridge (API) | Diferencia | Prob. (API) | Alerta (API) | ¿Acierta? |
-|---|---|---|---|---|---|---|---|---|
-| C-001 | Visto | 28.6 | — | — | — | — | — | — |
-| C-010 | Visto | 37.3 | — | — | — | — | — | — |
-| C-017 | Visto | 53.1 | — | — | — | — | — | — |
-| C-043 | Visto | 2.2 | — | — | — | — | — | — |
-| C-128 | Visto | 30.4 | — | — | — | — | — | — |
+Los resultados completos están documentados en las secciones 6 y 7.
 
 ## 4. Criterios de Aceptación
 
