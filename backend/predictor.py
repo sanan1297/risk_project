@@ -10,9 +10,9 @@ MODELS_DIR = ROOT / "models"
 
 MODEL_META = {
     "modelo": "Ridge + LogisticRegression",
-    "r2_cv": 0.103,
-    "auc_cv": 0.639,
-    "accuracy": 0.706,
+    "r2_cv": 0.149,
+    "auc_cv": 0.662,
+    "rmse": 16.0,
 }
 
 

@@ -9,7 +9,6 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load_matriz() -> pd.DataFrame:
-    """Matriz de riesgos limpia — datos reales con los que se entrenó el modelo."""
     path = ROOT / "docs" / "matriz_clean.csv"
     return pd.read_csv(path)
 
@@ -29,14 +28,16 @@ def compute() -> dict:
     coefs = _load_coeficientes()
     ipc_trm_data = _load_ipc_trm()
 
-    # Un contrato por fila (sobrecosto se repite en todos sus riesgos)
+    n_riesgos_raw = len(matriz)
+    n_contratos_raw = int(matriz["id_contrato"].nunique())
+
     contratos = matriz.groupby("id_contrato", sort=False).agg(
         sobrecosto=("sobrecosto", "first"),
         n_riesgos=("id_riesgo", "nunique"),
     ).reset_index()
-    # Mismo filtro que train_final_model.py (quita outlier C-143: 808%)
     contratos = contratos[contratos["sobrecosto"] < 200].copy()
     n_contratos = len(contratos)
+    n_riesgos_filtro = int(contratos["n_riesgos"].sum())
 
     sc = contratos["sobrecosto"]
     bins = [0, 10, 25, 50, 100, sc.max()]
@@ -64,31 +65,60 @@ def compute() -> dict:
     cat_counts = matriz["categoria"].value_counts().reset_index()
     cat_counts.columns = ["categoria", "cantidad"]
 
+    tipo_counts = matriz["tipo"].value_counts().reset_index()
+    tipo_counts.columns = ["tipo", "cantidad"]
+
     ipc_trm_series = [
         {"anio": int(k), "ipc": v["ipc"], "trm": v["trm"]}
         for k, v in sorted(ipc_trm_data.items())
     ]
 
-    tipo_counts = matriz["tipo"].value_counts().reset_index()
-    tipo_counts.columns = ["tipo", "cantidad"]
-
-    # Datos del pool original (solo informativo)
     pool_path = ROOT / "contratos" / "proyectos_secop1_lite.csv"
     n_pool = len(pd.read_csv(pool_path)) if pool_path.exists() else 0
+
+    # Riesgos por contrato
+    riesgos_pc = contratos["n_riesgos"]
+    dist_n_riesgos = {
+        "min": int(riesgos_pc.min()),
+        "max": int(riesgos_pc.max()),
+        "media": round(riesgos_pc.mean(), 1),
+        "mediana": int(riesgos_pc.median()),
+    }
+
+    # Top contratos mas riesgosos (por n_riesgos)
+    top_n_riesgos = (
+        contratos.sort_values("n_riesgos", ascending=False)
+        .head(5)
+        .assign(sobrecosto=lambda x: x["sobrecosto"].round(1))
+        .to_dict(orient="records")
+    )
+
+    # Top contratos con mayor sobrecosto
+    top_sobrecosto = (
+        contratos.sort_values("sobrecosto", ascending=False)
+        .head(5)
+        .assign(sobrecosto=lambda x: x["sobrecosto"].round(1))
+        .to_dict(orient="records")
+    )
 
     return {
         "modelo": MODEL_META,
         "total_contratos": n_contratos,
+        "contratos_raw": n_contratos_raw,
         "contratos_pool_secop1": n_pool,
         "contratos_secop2_incluidos": 5,
+        "total_riesgos_matriz": n_riesgos_raw,
+        "total_riesgos_filtro": n_riesgos_filtro,
+        "contratos_en_matriz": n_contratos_raw,
         "sobrecosto_promedio": round(sc.mean(), 1),
         "sobrecosto_mediana": round(sc.median(), 1),
         "porcentaje_alto_riesgo": round((sc > 25).mean(), 4),
-        "total_riesgos_matriz": len(matriz),
-        "contratos_en_matriz": int(matriz["id_contrato"].nunique()),
         "distribucion_sobrecosto": dist_sobrecosto.to_dict(orient="records"),
         "top_coeficientes": top_aumentan + top_disminuyen,
         "categorias_riesgo": cat_counts.to_dict(orient="records"),
         "tipos_riesgo": tipo_counts.to_dict(orient="records"),
         "ipc_trm": ipc_trm_series,
+        "dist_n_riesgos": dist_n_riesgos,
+        "top_n_riesgos": top_n_riesgos,
+        "top_sobrecosto": top_sobrecosto,
     }

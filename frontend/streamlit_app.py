@@ -283,9 +283,9 @@ with st.sidebar:
     st.space("large")
     with st.container(border=True):
         st.markdown("**:material/bar_chart: Rendimiento del Modelo**")
-        st.caption("R² CV: 0.103 ± 0.080")
-        st.caption("AUC CV: 0.639 ± 0.071")
-        st.caption("RMSE: 16.3 pp")
+        st.caption("R²: 0.149")
+        st.caption("AUC CV: 0.662 ± 0.026")
+        st.caption("RMSE: 16.0 pp")
 
     st.space("large")
     st.caption("Risk Control Dashboard v0.5")
@@ -293,9 +293,9 @@ with st.sidebar:
 
 # ─── MODEL METRICS LABELS ──────────────────────────────
 MODEL_METRICS_LABELS = {
-    "r2_cv": "R² (CV)",
+    "r2_cv": "R²",
     "auc_cv": "AUC (CV)",
-    "accuracy": "Accuracy",
+    "rmse": "RMSE",
 }
 
 
@@ -496,8 +496,8 @@ def _render_tab_uso():
         fig.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=20),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#000000", size=11),
-            xaxis=dict(title="Estimado (%)", gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000")),
-            yaxis=dict(title="Real (%)", gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000")),
+            xaxis=dict(title=dict(text="Estimado (%)", font=dict(color="#000000")), gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000")),
+            yaxis=dict(title=dict(text="Real (%)", font=dict(color="#000000")), gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000")),
             hovermode="closest")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key="graf_uso_vsreal")
         st.html("</div>")
@@ -514,16 +514,22 @@ def _render_tab_entrenamiento():
     sm = stats["sobrecosto_mediana"]
     par = stats["porcentaje_alto_riesgo"]
     trm = stats["total_riesgos_matriz"]
+    trm_f = stats["total_riesgos_filtro"]
     cm = stats["contratos_en_matriz"]
     pool = stats.get("contratos_pool_secop1", 0)
     secop2 = stats.get("contratos_secop2_incluidos", 0)
+    dn = stats.get("dist_n_riesgos", {})
 
     st.html(f"""
-    <div class="kpi-row">
-      {kpi_card("Entrenamiento", f"{tc:,}", f"de {pool} del pool SECOP I", ("#4facfe", "#00f2fe"), True)}
-      {kpi_card("Sobrecosto Prom.", f"{sp:.1f}%", f"mediana: {sm:.1f}%", ("#EF4444", "#F97316"), sp < 25)}
+    <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr);">
+      {kpi_card("Contratos Entrenados", f"{tc:,}", f"{cm} raw · {pool} pool SECOP I", ("#4facfe", "#00f2fe"), True)}
+      {kpi_card("Sobrecosto Promedio", f"{sp:.1f}%", f"mediana: {sm:.1f}%", ("#EF4444", "#F97316"), sp < 25)}
       {kpi_card("Alto Riesgo (>25%)", f"{par*100:.0f}%", f"de {tc} contratos", ("#F39C12", "#FDB813"), par < 0.5)}
-      {kpi_card("Matriz de Riesgos", f"{trm:,}", f"{cm} contratos (+{secop2} SECOP II)", ("#7B5CE4", "#b06ff2"), True)}
+    </div>
+    <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr);">
+      {kpi_card("Matriz de Riesgos", f"{trm_f:,}", f"{tc} contratos (+{secop2} SECOP II)", ("#7B5CE4", "#b06ff2"), True)}
+      {kpi_card("Riesgos x Contrato", f"{dn.get('media', 0):.0f}", f"min: {dn.get('min', 0)} · máx: {dn.get('max', 0)}", ("#1ABC9C", "#2ECC71"), True)}
+      {kpi_card("Features del Modelo", "33", "top: tfidf_diseños +1.24", ("#E91E63", "#FF6F61"), True)}
     </div>
     """)
 
@@ -569,10 +575,12 @@ def _render_tab_entrenamiento():
         st.html(f'<div class="chart-card"><div class="chart-title">Categorías de Riesgo</div><div class="chart-subtitle">Distribución en la matriz de entrenamiento</div>')
         df_cat = pd.DataFrame(stats["categorias_riesgo"])
         if not df_cat.empty:
+            colors_cat = {"bajo": "#1ABC9C", "medio": "#F39C12", "alto": "#EF4444", "extremo": "#8B0000", "no especificado": "#95A5A6"}
+            df_cat["color"] = df_cat["categoria"].map(colors_cat).fillna(MORADO)
             fig = go.Figure()
             fig.add_trace(go.Bar(
                 x=df_cat["cantidad"], y=df_cat["categoria"],
-                orientation="h", marker_color=MORADO,
+                orientation="h", marker_color=df_cat["color"],
                 text=df_cat["cantidad"], textposition="outside", textfont=dict(color="#000000", size=11)))
             fig.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=20),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -603,19 +611,68 @@ def _render_tab_entrenamiento():
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key="graf_ent_ipctrm")
         st.html("</div>")
 
+    c5, c6 = st.columns(2)
+    with c5:
+        top_sc = stats.get("top_sobrecosto", [])
+        if top_sc:
+            st.html(f'<div class="chart-card"><div class="chart-title">Contratos con Mayor Sobrecosto</div><div class="chart-subtitle">Top 5 de la matriz de entrenamiento</div>')
+            rows_html = "".join(
+                f'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #e0e0e0;">'
+                f'<span style="font-weight:600;">{r["id_contrato"]}</span>'
+                f'<span style="color:#EF4444;font-weight:700;">{r["sobrecosto"]:.1f}%</span>'
+                f'<span style="color:#64748B;">{int(r["n_riesgos"])} riesgos</span>'
+                f'</div>'
+                for r in top_sc
+            )
+            st.html(f'<div style="margin-top:4px;">{rows_html}</div></div>')
+
+    with c6:
+        top_riesgos = stats.get("top_n_riesgos", [])
+        if top_riesgos:
+            st.html(f'<div class="chart-card"><div class="chart-title">Contratos con Más Riesgos</div><div class="chart-subtitle">Top 5 por cantidad de riesgos</div>')
+            rows_html = "".join(
+                f'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #e0e0e0;">'
+                f'<span style="font-weight:600;">{r["id_contrato"]}</span>'
+                f'<span style="color:#7B5CE4;font-weight:700;">{int(r["n_riesgos"])} riesgos</span>'
+                f'<span style="color:{NARANJA};">{r["sobrecosto"]:.1f}%</span>'
+                f'</div>'
+                for r in top_riesgos
+            )
+            st.html(f'<div style="margin-top:4px;">{rows_html}</div></div>')
+
+    st.html('<div style="margin-top:1rem;">')
     modelo = stats.get("modelo", {})
     if modelo:
-        st.html(f'<div class="chart-card"><div class="chart-title">Rendimiento del Modelo</div><div class="chart-subtitle">Métricas de validación cruzada</div>')
-        met_cols = st.columns(len(modelo))
+        DESCRIPCIONES_METRICAS = {
+            "r2_cv": "Variación del sobrecosto explicada",
+            "auc_cv": "Capacidad de separar alto riesgo",
+            "rmse": "Error típico de la predicción",
+        }
+        st.html(f'<div class="chart-card"><div class="chart-title">Rendimiento del Modelo</div><div class="chart-subtitle">Métricas del modelo actual (33 features)</div>')
+        met_cols = st.columns([2.2, 1.6, 1.6, 1.6])
         for i, (k, v) in enumerate(modelo.items()):
             if k == "modelo":
                 with met_cols[0]:
-                    st.metric("Modelo", v)
+                    st.markdown(
+                        f'<div style="background:white;border-radius:12px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);height:100%;display:flex;flex-direction:column;justify-content:center;">'
+                        f'<div style="font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;">Modelo</div>'
+                        f'<div style="font-size:1.5rem;font-weight:800;color:#1E293B;white-space:nowrap;">{v}</div>'
+                        f'<div style="font-size:0.7rem;color:transparent;padding:7px 0;">‎</div></div>',
+                        unsafe_allow_html=True,
+                    )
             else:
                 with met_cols[-(i) if i > 0 else i]:
                     label = MODEL_METRICS_LABELS.get(k, k)
-                    st.metric(label, f"{v:.3f}" if isinstance(v, float) else v)
+                    desc = DESCRIPCIONES_METRICAS.get(k, "")
+                    st.markdown(
+                        f'<div style="background:white;border-radius:12px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+                        f'<div style="font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;">{label}</div>'
+                        f'<div style="font-size:1.8rem;font-weight:800;color:#1E293B;">{v:.3f}</div>'
+                        f'<div style="font-size:0.7rem;color:#94A3B8;margin-top:2px;">{desc}</div></div>',
+                        unsafe_allow_html=True,
+                    )
         st.html("</div>")
+    st.html('</div>')
 
 def _render_dashboard():
     pio.templates.default = "plotly_white"
@@ -984,9 +1041,9 @@ def _render_history():
                             fd = h.get("factores_disminuyen", [])[:2]
                             parts = []
                             for f in fa:
-                                parts.append(f'<span style="color:#16A34A;font-size:0.75rem;">▲ {f["label"]}</span>')
+                                parts.append(f'<span style="color:#DC2626;font-size:0.75rem;">▲ {f["label"]}</span>')
                             for f in fd:
-                                parts.append(f'<span style="color:#DC2626;font-size:0.75rem;">▼ {f["label"]}</span>')
+                                parts.append(f'<span style="color:#16A34A;font-size:0.75rem;">▼ {f["label"]}</span>')
                             if parts:
                                 st.markdown(
                                     f'<div style="margin-top:2px; display:flex; gap:10px; flex-wrap:wrap;">'

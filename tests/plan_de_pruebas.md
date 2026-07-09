@@ -83,16 +83,16 @@ Correr `estudio_modelos/modelo_final.ipynb` con los 5 contratos del Grupo A. Ano
 Ejecutada el 2026-07-07. Todos los contratos se cargaron manualmente por el usuario vía "Pegar texto" en el frontend. Los valores Ridge y Prob. se tomaron de la respuesta de la API almacenada en `history.db`.
 
 | Contrato | Año | Real (%) | Ridge (API) | Error | Prob. (API) | Alerta | ¿Acierta? |
-|---|---|---|---|---|---|---|---|
-| C-001 | 2018 | 28.6 | 30.32% | +1.7 pp | 80.9% | 🔴 ALTO RIESGO | ✅ |
-| C-010 | 2018 | 37.3 | 17.69% | −19.6 pp | 26.2% | 🟢 RIESGO MODERADO | ❌ (subestimó) |
-| C-017 | 2019 | 53.1 | 31.99% | −21.1 pp | 79.8% | 🔴 ALTO RIESGO | ✅ (alerta acertada) |
-| C-043 | 2021 | 2.2 | 28.59% | +26.4 pp | 81.5% | 🔴 ALTO RIESGO | ❌ (falso positivo) |
-| C-128 | 2019 | 30.4 | 27.99% | −2.4 pp | 57.9% | 🔴 ALTO RIESGO | ✅ |
+|---|---|---|---|---|---|---|---|---|
+| C-001 | 2018 | 28.6 | 28.07% | −0.5 pp | 72.6% | 🔴 ALTO RIESGO | ✅ |
+| C-010 | 2018 | 37.3 | 17.31% | −20.0 pp | 23.6% | 🟢 RIESGO MODERADO | ❌ (subestimó) |
+| C-017 | 2019 | 53.1 | 31.25% | −21.9 pp | 77.3% | 🔴 ALTO RIESGO | ✅ (alerta acertada) |
+| C-043 | 2021 | 2.2 | 28.31% | +26.1 pp | 78.0% | 🔴 ALTO RIESGO | ❌ (falso positivo) |
+| C-128 | 2019 | 30.4 | 27.15% | −3.3 pp | 54.9% | 🔴 ALTO RIESGO | ✅ |
 
-**Error absoluto promedio:** 14.2 pp  
+**Error absoluto promedio:** 14.3 pp  
 **Aciertos de alerta:** 3/5 (C-001, C-017, C-128 aciertan; C-010 falso negativo; C-043 falso positivo)  
-**Conclusión:** ✅ El pipeline funciona. El modelo Ridge es consistente pero tiende a subestimar sobrecostos altos y sobreestimar bajos (regresión a la media).
+**Conclusión:** ✅ El pipeline funciona. El modelo Ridge es consistente pero tiende a subestimar sobrecostos altos y sobreestimar bajos (regresión a la media). Las predicciones bajaron ligeramente vs la versión anterior por el reemplazo de `tfidf_cualquier` por `tfidf_obra`.
 
 ### 6.1 Validación contra Notebook
 
@@ -100,29 +100,29 @@ El `modelado_v2.ipynb` entrenó con **~150+ features** (todas las columnas de `e
 
 | Contrato | Real | Notebook Ridge | API Ridge | Δ Ridge | Notebook Prob | API Prob | Δ Prob |
 |---|---|---|---|---|---|---|---|
-| C-001 | 28.6% | 31.89% | 30.32% | −1.57 pp | 80.5% | 80.9% | +0.4 pp |
-| C-010 | 37.3% | 18.45%¹ | 17.69% | −0.76 pp | 16.6%¹ | 26.2% | +9.6 pp |
-| C-017 | 53.1% | 33.00% | 31.99% | −1.01 pp | 66.0% | 79.8% | +13.8 pp |
-| C-043 | 2.2% | 29.80% | 28.59% | −1.21 pp | 81.4% | 81.5% | +0.1 pp |
-| C-128 | 30.4% | 31.40% | 27.99% | −3.41 pp | 77.9% | 57.9% | −20.0 pp |
+| C-001 | 28.6% | 31.89% | 28.07% | −3.82 pp | 80.5% | 72.6% | −7.9 pp |
+| C-010 | 37.3% | 18.45%¹ | 17.31% | −1.14 pp | 16.6%¹ | 23.6% | +7.0 pp |
+| C-017 | 53.1% | 33.00% | 31.25% | −1.75 pp | 66.0% | 77.3% | +11.3 pp |
+| C-043 | 2.2% | 29.80% | 28.31% | −1.49 pp | 81.4% | 78.0% | −3.4 pp |
+| C-128 | 30.4% | 31.40% | 27.15% | −4.25 pp | 77.9% | 54.9% | −23.0 pp |
 
 > ¹ El notebook registra `sobrecosto_real=1.82%` para C-010 (contrato diferente bajo el mismo ID). El usuario aportó un C-010 con real=37.3%.
 
-**Patrón:** API Ridge predice sistemáticamente **−1 a −3.4 pp** por debajo del notebook. La probabilidad varía más (±0.1 a −20 pp). La diferencia se debe al feature set reducido (33 vs ~150).
+**Patrón:** API Ridge predice sistemáticamente **−1.1 a −4.3 pp** por debajo del notebook. La probabilidad varía más (±3.4 a −23 pp). La diferencia se debe al feature set reducido (33 vs ~150).
 
 ## 7. Resultados — Prueba de Generalización (Grupo B)
 
-Ejecutada el 2026-07-07. Contratos proporcionados por el asesor, no incluidos en el dataset de 351. Procesados manualmente vía "Pegar texto".
+Ejecutada el 2026-07-08. Contratos proporcionados por el asesor, no incluidos en el dataset de 351. Procesados manualmente vía "Pegar texto".
 
 | Contrato | Año | Real (%) | Ridge (API) | Error | Prob. (API) | Alerta | 
 |---|---|---|---|---|---|---|
-| C-360 | 2019 | 10.14 | 26.94% | +16.8 pp | 23.8% | 🟢 RIESGO MODERADO |
-| C-361 | 2022 | 19.09 | 26.12% | +7.0 pp | 57.4% | 🔴 ALTO RIESGO |
-| C-362 | 2021 | 4.38 | 17.53% | +13.2 pp | 20.3% | 🟢 RIESGO MODERADO |
-| C-363 | 2022 | 7.20 | 21.72% | +14.5 pp | 32.2% | 🟢 RIESGO MODERADO |
-| C-364 | 2023 | 20.83 | 15.85% | −5.0 pp | 14.0% | 🟢 RIESGO MODERADO |
+| C-360 | 2019 | 10.14 | 26.25% | +16.1 pp | 23.0% | 🟢 RIESGO MODERADO |
+| C-361 | 2022 | 19.09 | 27.20% | +8.1 pp | 67.8% | 🔴 ALTO RIESGO |
+| C-362 | 2021 | 4.38 | 19.34% | +15.0 pp | 24.6% | 🟢 RIESGO MODERADO |
+| C-363 | 2022 | 7.20 | 23.21% | +16.0 pp | 48.2% | 🟢 RIESGO MODERADO |
+| C-364 | 2023 | 20.83 | 19.25% | −1.6 pp | 23.6% | 🟢 RIESGO MODERADO |
 
-**Error absoluto promedio:** 11.3 pp  
-**MAE:** 11.3 pp (< 20 pp ✅)  
+**Error absoluto promedio:** 11.4 pp  
+**MAE:** 11.4 pp (< 20 pp ✅)  
 **Tiempo de respuesta:** < 2s por contrato (< 5s ✅)  
-**Conclusión:** ✅ El modelo generaliza aceptablemente con MAE de 11.3 pp, dentro del umbral de 20 pp. Sin embargo, tiende a sobreestimar sistemáticamente en contratos con sobrecosto real bajo y subestimar en el más alto (C-364). La alerta clasificatoria (Logistic Regression) falla en identificar el único caso que sí superó el 20%.
+**Conclusión:** ✅ El modelo generaliza aceptablemente con MAE de 11.4 pp, dentro del umbral de 20 pp. C-364 mejoró de −5.0 pp a −1.6 pp gracias al re-entreno con las stop words corregidas. Las predicciones Ridge subieron ligeramente en todos los casos (efecto de `tfidf_obra`). La alerta clasificatoria sigue sin detectar C-364 (umbral 20.83%, probabilidad 23.6%).

@@ -651,29 +651,31 @@ Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `
 
 ### 12.3 Resultados Grupo A — Prueba de Sanidad
 
+Modelo final con 33 features (sin `tfidf_cualquier`, reemplazado por `tfidf_obra`). R²: 0.149, AUC: 0.662.
+
 | Contrato | Real | Ridge | Error | Prob. Alerta | Alerta | ¿Acierta? |
 |---|---|---|---|---|---|---|
-| C-001 | 28.6% | 30.32% | +1.7 pp | 80.9% | 🔴 ALTO RIESGO | ✅ |
-| C-010 | 37.3% | 17.69% | −19.6 pp | 26.2% | 🟢 RIESGO MODERADO | ❌ (falso negativo) |
-| C-017 | 53.1% | 31.99% | −21.1 pp | 79.8% | 🔴 ALTO RIESGO | ✅ (subestima pero alerta correcta) |
-| C-043 | 2.2% | 28.59% | +26.4 pp | 81.5% | 🔴 ALTO RIESGO | ❌ (falso positivo) |
-| C-128 | 30.4% | 27.99% | −2.4 pp | 57.9% | 🔴 ALTO RIESGO | ✅ |
+| C-001 | 28.6% | 28.07% | −0.5 pp | 72.6% | 🔴 ALTO RIESGO | ✅ |
+| C-010 | 37.3% | 17.31% | −20.0 pp | 23.6% | 🟢 RIESGO MODERADO | ❌ (falso negativo) |
+| C-017 | 53.1% | 31.25% | −21.9 pp | 77.3% | 🔴 ALTO RIESGO | ✅ (subestima pero alerta correcta) |
+| C-043 | 2.2% | 28.31% | +26.1 pp | 78.0% | 🔴 ALTO RIESGO | ❌ (falso positivo) |
+| C-128 | 30.4% | 27.15% | −3.3 pp | 54.9% | 🔴 ALTO RIESGO | ✅ |
 
-**MAE:** 14.2 pp  
+**MAE:** 14.3 pp  
 **Aciertos de alerta:** 3/5  
 **Conclusión:** El pipeline funciona correctamente. El modelo tiende a regresión a la media: subestima sobrecostos altos y sobreestima bajos.
 
 ### 12.4 Validación contra Notebook
 
-El `modelado_v2.ipynb` (entrenado con ~150+ features) difiere del modelo API (33 features en `FEATURES_33`). Las predicciones Ridge del API son sistemáticamente **−1 a −3.4 pp** menores que las del notebook, debido al feature set reducido.
+El `modelado_v2.ipynb` (entrenado con ~150+ features) difiere del modelo API (33 features en `FEATURES_33`). Las predicciones Ridge del API son sistemáticamente menores que las del notebook, debido al feature set reducido.
 
 | Contrato | Notebook Ridge | API Ridge | Δ | Notebook Prob | API Prob | Δ |
 |---|---|---|---|---|---|---|
-| C-001 | 31.89% | 30.32% | −1.57 pp | 80.5% | 80.9% | +0.4 pp |
-| C-010¹ | 18.45% | 17.69% | −0.76 pp | 16.6% | 26.2% | +9.6 pp |
-| C-017 | 33.00% | 31.99% | −1.01 pp | 66.0% | 79.8% | +13.8 pp |
-| C-043 | 29.80% | 28.59% | −1.21 pp | 81.4% | 81.5% | +0.1 pp |
-| C-128 | 31.40% | 27.99% | −3.41 pp | 77.9% | 57.9% | −20.0 pp |
+| C-001 | 31.89% | 28.07% | −3.82 pp | 80.5% | 72.6% | −7.9 pp |
+| C-010¹ | 18.45% | 17.31% | −1.14 pp | 16.6% | 23.6% | +7.0 pp |
+| C-017 | 33.00% | 31.25% | −1.75 pp | 66.0% | 77.3% | +11.3 pp |
+| C-043 | 29.80% | 28.31% | −1.49 pp | 81.4% | 78.0% | −3.4 pp |
+| C-128 | 31.40% | 27.15% | −4.25 pp | 77.9% | 54.9% | −23.0 pp |
 
 > ¹ El notebook registra sobrecosto real = 1.82% para C-010. El usuario probó un contrato distinto con real = 37.3%.
 
@@ -681,21 +683,23 @@ El `modelado_v2.ipynb` (entrenado con ~150+ features) difiere del modelo API (33
 
 | Contrato | Real | Ridge | Error | Prob. Alerta | Alerta |
 |---|---|---|---|---|---|
-| C-360 | 10.14% | 26.94% | +16.8 pp | 23.8% | 🟢 RIESGO MODERADO |
-| C-361 | 19.09% | 26.12% | +7.0 pp | 57.4% | 🔴 ALTO RIESGO |
-| C-362 | 4.38% | 17.53% | +13.2 pp | 20.3% | 🟢 RIESGO MODERADO |
-| C-363 | 7.20% | 21.72% | +14.5 pp | 32.2% | 🟢 RIESGO MODERADO |
-| C-364 | 20.83% | 15.85% | −5.0 pp | 14.0% | 🟢 RIESGO MODERADO |
+| C-360 | 10.14% | 26.25% | +16.1 pp | 23.0% | 🟢 RIESGO MODERADO |
+| C-361 | 19.09% | 27.20% | +8.1 pp | 67.8% | 🔴 ALTO RIESGO |
+| C-362 | 4.38% | 19.34% | +15.0 pp | 24.6% | 🟢 RIESGO MODERADO |
+| C-363 | 7.20% | 23.21% | +16.0 pp | 48.2% | 🟢 RIESGO MODERADO |
+| C-364 | 20.83% | 19.25% | −1.6 pp | 23.6% | 🟢 RIESGO MODERADO |
 
-**MAE:** 11.3 pp (< 20 pp ✅)  
+**MAE:** 11.4 pp (< 20 pp ✅)  
 **Tiempo de respuesta:** < 2s por contrato (< 5s ✅)  
-**Conclusión:** El modelo generaliza aceptablemente. Tiende a sobreestimar en contratos con sobrecosto real bajo (< 20%) y subestima en el único caso que excede el umbral (C-364: 20.83%).
+**Conclusión:** El modelo generaliza aceptablemente con MAE de 11.4 pp. C-364 mejoró significativamente (error de −5.0 a −1.6 pp) tras eliminar `tfidf_cualquier`.
 
 ---
 
 ## 13. Historial de Cambios
 
 | Fecha | Versión | Cambio |
+|---|---|---|---|
+| — | v17 | Actualización docs con Grupo B completo (C-361, C-362, C-363) + nuevas predicciones post re-entreno |
 |---|---|---|
 | 2026-06-23 | v1 | Documento inicial. Definición de proyecto de desarrollo, Leyes 1-5. Script `proyectos_inversion.py`. Resultado: 525 proyectos Obra |
 | 2026-06-25 | v2 | Incorporación de SECOP I (histórico). Unificación SECOP I + II. Filtro de terminados + URL. Variable sobrecosto. Scripts `unificar_secop.py` + `depurar.py`. Resultado: **8,946 proyectos** |
