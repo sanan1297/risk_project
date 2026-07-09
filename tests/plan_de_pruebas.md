@@ -96,7 +96,7 @@ Ejecutada el 2026-07-07. Todos los contratos se cargaron manualmente por el usua
 
 ### 6.1 Validación contra Notebook
 
-El `modelo_final.ipynb` entrenó con **~150+ features** (todas las columnas de `engineer_features`), mientras el prototipo API usa **33 features** (hardcodeadas en `FEATURES_33` en `train_final_model.py`). Los modelos se reentrenaron por separado, por lo que las predicciones difieren.
+El `modelado_v2.ipynb` entrenó con **~150+ features** (todas las columnas de `engineer_features`), mientras el prototipo API usa **33 features** (hardcodeadas en `FEATURES_33` en `train_final_model.py`). Los modelos se reentrenaron por separado, por lo que las predicciones difieren.
 
 | Contrato | Real | Notebook Ridge | API Ridge | Δ Ridge | Notebook Prob | API Prob | Δ Prob |
 |---|---|---|---|---|---|---|---|

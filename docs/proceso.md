@@ -612,8 +612,8 @@ risk_project/
 1. ~~Feature engineering: agregar ~6,525 riesgos en 351 filas por contrato~~ ✅ `contratos_features.csv`
 2. ~~Feature reduction: top 30 por RF importance + control variables~~ ✅ `contratos_features_reducido.csv`
 3. ~~Benchmarking v1 (219 vars): Ridge campeón 0.074, todos evaluados~~ ✅ `modelado.ipynb`
-4. ~~Benchmarking v2 (33 vars): Ridge campeón R² 0.103, GPU XGBoost probado~~ ✅ `modelado_v2.ipynb`
-5. ~~Optimizaciones: log-target + interacciones descartadas (empeoran R²)~~ ✅ `modelado_v2.ipynb` sección 11
+4. ~~Benchmarking v2 (33 vars): Ridge campeón R² 0.103, GPU XGBoost probado~~ ✅ `modelo_final.ipynb`
+5. ~~Optimizaciones: log-target + interacciones descartadas (empeoran R²)~~ ✅ `modelo_final.ipynb` sección 11
 6. ~~Interpretación de coeficientes Ridge: top features identificadas~~ ✅ `modelo.md`
 7. ~~**Prototipo**: Streamlit dashboard para predicción interactiva de sobrecosto~~ ✅ Hecho
 8. ~~**Validación**: 5 contratos Grupo A (sanidad) + 5 contratos Grupo B (generalización)~~ ✅ `tests/plan_de_pruebas.md`
@@ -665,7 +665,7 @@ Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `
 
 ### 12.4 Validación contra Notebook
 
-El `modelo_final.ipynb` (entrenado con ~150+ features) difiere del modelo API (33 features en `FEATURES_33`). Las predicciones Ridge del API son sistemáticamente **−1 a −3.4 pp** menores que las del notebook, debido al feature set reducido.
+El `modelado_v2.ipynb` (entrenado con ~150+ features) difiere del modelo API (33 features en `FEATURES_33`). Las predicciones Ridge del API son sistemáticamente **−1 a −3.4 pp** menores que las del notebook, debido al feature set reducido.
 
 | Contrato | Notebook Ridge | API Ridge | Δ | Notebook Prob | API Prob | Δ |
 |---|---|---|---|---|---|---|

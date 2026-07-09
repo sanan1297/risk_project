@@ -80,7 +80,7 @@ risk_project/
 │   └── normalizar.py             # Normalización de matriz de riesgos
 ├── estudio_modelos/              # Notebooks de exploración y benchmark
 │   ├── modelo_final.ipynb
-│   ├── modelado.ipynb / modelado_v2.ipynb
+│   ├── modelado.ipynb / modelo_final.ipynb
 │   └── matriz_inicial.ipynb
 ├── docs/
 │   ├── proceso.md                # Documentación completa del proceso

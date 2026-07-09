@@ -222,7 +222,7 @@ risk_project/
 │   └── modelo.md                        # Este documento
 ├── estudio_modelos/
 │   ├── modelado.ipynb                   # v1: 219 features, baseline
-│   ├── modelado_v2.ipynb                # v2: 33 features + GPU + optimizaciones
+│   ├── modelo_final.ipynb                # v2: 33 features + GPU + optimizaciones
 │   └── resultados_v2/                   # Gráficos y tablas generadas
 ```
 
