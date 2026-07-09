@@ -120,15 +120,7 @@ st.html(f"""
   }}
   .history-metric .label {{ font-size: 0.7rem; color: {MUTED}; }}
   .history-metric .value {{ font-size: 1rem; font-weight: 600; color: {TEXT_COLOR}; }}
-  div[data-testid="column"]:nth-child(5) div[data-testid="column"] button {{
-    margin-top: 4px !important; padding: 0 2px !important; font-size: 13px !important; line-height: 1 !important; min-height: 0 !important; height: auto !important;
-  }}
-  div[data-testid="column"]:nth-child(5) div[data-testid="column"]:first-child button {{
-    margin-right: -14px !important;
-  }}
-  div[data-testid="column"]:nth-child(5) div[data-testid="column"]:last-child button {{
-    margin-left: -14px !important;
-  }}
+  [class*="st-key-edit_"] button, [class*="st-key-del_"] button {{ margin-top: 10px !important; padding: 0 4px !important; min-height: 0 !important; height: auto !important; font-size: 13px !important; }}
 
   /* RESULTADOS: forzar texto oscuro en tarjetas de predicción */
   .stContainer > div[data-testid="stVerticalBlockBorder"] .stMarkdown h3,
@@ -1009,7 +1001,8 @@ def _render_history():
                             st.markdown(f'<div class="history-metric"><div class="label" style="color:{MUTED};">Real</div><div class="value" style="color:{TEXT_COLOR};">{real_str}</div></div>', unsafe_allow_html=True)
                         with hcols[4]:
                             editando = st.session_state.get(f"editando_{hid}", False)
-                            btn_sub = st.columns([1, 1], gap="small")
+                            st.markdown('<style>div[data-testid="column"]:nth-of-type(5) div[data-testid="column"]{gap:0!important}div[data-testid="column"]:nth-of-type(5) div[data-testid="column"] button{margin-top:10px!important;padding:0 4px!important;min-height:0!important;height:auto!important;font-size:13px!important}</style>', unsafe_allow_html=True)
+                            btn_sub = st.columns([0.4, 0.4], gap="small")
                             with btn_sub[0]:
                                 if st.button(":material/edit:", key=f"edit_{hid}", help="Editar"):
                                     st.session_state[f"editando_{hid}"] = not editando
