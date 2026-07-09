@@ -84,7 +84,7 @@ sobrecosto_pct = ((valor_final - valor_inicial) / valor_inicial) × 100
 ### 4.1 Resumen numérico
 
 | Etapa | SECOP I | SECOP II | Total |
-|---|---|---|---|
+|---|---|---|---|---|
 | Descargados | 35,233 | 16,298 | 51,531 |
 | Inversión | 35,233 | 10,848 | 46,081 |
 | ≥ $500M | 5,500 | 3,446 | 8,946 |
@@ -97,6 +97,8 @@ sobrecosto_pct = ((valor_final - valor_inicial) / valor_inicial) × 100
 | Duplicados por URL (post-separación) | 777 | — | **777** |
 | **SECOP I sin duplicados (`proyectos_secop1.csv`)** | **4,723** | — | **4,723** |
 | Con sobrecosto > 0 (SECOP I lite) | **1,560** | — | **1,560** |
+
+> **Nota:** El modelo ML se entrenó con **350 contratos** — aquellos que tienen matriz de riesgo extraída en `docs/matriz_clean.csv`. Los 1,560 son el pool total de candidatos SECOP I con sobrecosto > 0; el resto no alcanzó a tener su matriz extraída (proceso manual: PDF → OCR → LLM). Los 5 contratos SECOP II mapeados (C-110 a C-114) están incluidos dentro de esos 350.
 
 ### 4.2 Estadísticas de sobrecosto
 
@@ -436,7 +438,7 @@ graph LR
     K --> L[normalizar.py]
     L --> M[matriz_clean.csv<br/>351 contratos]
     M --> N[Feature Engineering<br/>219 features → 33]
-    N --> O[Modelo Ridge<br/>R² 0.103]
+    N --> O[Modelo Ridge<br/>R² 0.103<br/>350 contratos]
     O --> P[ridge_regressor.pkl<br/>coeficientes_ridge.csv]
     P --> Q[FastAPI Backend<br/>/predict]
     Q --> R[Streamlit Frontend<br/>Dashboard + Predicción]
@@ -542,7 +544,7 @@ erDiagram
 
 ### 9.2 Dashboard — Entrenamiento
 
-- **KPI Cards:** Contratos totales, Sobrecosto promedio/mediana, % Alto Riesgo, Riesgos en matriz, Contratos en matriz
+- **KPI Cards:** Contratos de entrenamiento (con badge del pool SECOP I total), Sobrecosto promedio/mediana, % Alto Riesgo, Riesgos en matriz + contratos SECOP II
 - **Tabla:** Top 10 coeficientes del modelo Ridge (positivos y negativos)
 - **Gráfico:** Distribución de riesgos por clase (bar chart horizontal)
 - **Spinner** de carga mientras se leen datos de entrenamiento
@@ -708,3 +710,4 @@ El `modelo_final.ipynb` (entrenado con ~150+ features) difiere del modelo API (3
 | 2026-07-07 | v11 | Feature engineering completo: `contratos_features.csv` (219 features, 351 contratos). Feature reduction: top 30 por RF importance + anio/ipc/trm → `contratos_features_reducido.csv`. Benchmarking v2 con 33 features: Ridge campeón (R² 0.103, RMSE 15.6, <1s). GPU XGBoost probado con `device='cuda'`. Optimizaciones (log-target, interacciones, limpieza de coefs) descartadas por empeorar R². Documento `docs/modelo.md` creado con resultados completos |
 | 2026-07-07 | v12 | **Prototipo funcional implementado.** Backend FastAPI con 7 endpoints. Frontend Streamlit con 3 vistas (Dashboard/Predicción/Historial). Feature engineering pipeline con preservación de `id_contrato`. Dashboard con 2 tabs (Uso + Entrenamiento) con KPI cards, gráficos Plotly, y datos reales. Predictor unificado (CSV/texto) con formulario de validación inline. Historial paginado (20 regs/pág) con navegación y spinners de carga. Arquitectura completa documentada con diagramas Mermaid. Código muerto limpiado. |
 | 2026-07-07 | v13 | **Pruebas de validación completadas.** 10 contratos (Grupo A sanidad + Grupo B generalización). MAE Grupo B: 11.3 pp. Validación contra notebook documenta diferencia de feature set (33 vs ~150 vars). Parámetros IPC/TRM bloqueados fuera de vista de predicción. Formulario de validación agregado al historial. BD poblada con valores reales. Plan de pruebas en `tests/plan_de_pruebas.md`. Sección 12 agregada a este documento. |
+| 2026-07-08 | v14 | **Corrección de métricas de entrenamiento.** El dashboard mostraba "1,560 contratos" (pool SECOP I total) cuando el modelo se entrenó realmente con 350. `training_stats.py` cambiado de `proyectos_secop1_lite.csv` a `matriz_clean.csv` agrupado por contrato. Añadidos campos `contratos_pool_secop1` y `contratos_secop2_incluidos`. Frontend actualizado para mostrar "Entrenamiento: 350 de 1,560 del pool" y "Matriz: +5 SECOP II". README aclarado. |

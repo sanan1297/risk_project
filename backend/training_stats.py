@@ -8,14 +8,10 @@ from .predictor import MODEL_META
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load_contratos() -> pd.DataFrame:
-    path = ROOT / "contratos" / "proyectos_secop1_lite.csv"
-    return pd.read_csv(path)
-
-
 def _load_matriz() -> pd.DataFrame:
-    path = ROOT / "docs" / "matriz.csv"
-    return pd.read_csv(path, on_bad_lines="skip")
+    """Matriz de riesgos limpia — datos reales con los que se entrenó el modelo."""
+    path = ROOT / "docs" / "matriz_clean.csv"
+    return pd.read_csv(path)
 
 
 def _load_coeficientes() -> pd.DataFrame:
@@ -29,12 +25,20 @@ def _load_ipc_trm() -> dict:
 
 
 def compute() -> dict:
-    contratos = _load_contratos()
     matriz = _load_matriz()
     coefs = _load_coeficientes()
     ipc_trm_data = _load_ipc_trm()
 
-    sc = contratos["sobrecosto_pct"]
+    # Un contrato por fila (sobrecosto se repite en todos sus riesgos)
+    contratos = matriz.groupby("id_contrato", sort=False).agg(
+        sobrecosto=("sobrecosto", "first"),
+        n_riesgos=("id_riesgo", "nunique"),
+    ).reset_index()
+    # Mismo filtro que train_final_model.py (quita outlier C-143: 808%)
+    contratos = contratos[contratos["sobrecosto"] < 200].copy()
+    n_contratos = len(contratos)
+
+    sc = contratos["sobrecosto"]
     bins = [0, 10, 25, 50, 100, sc.max()]
     labels = ["0-10%", "10-25%", "25-50%", "50-100%", "100%+"]
     dist_bins = pd.cut(sc, bins=bins, labels=labels, right=True, include_lowest=True)
@@ -68,9 +72,15 @@ def compute() -> dict:
     tipo_counts = matriz["tipo"].value_counts().reset_index()
     tipo_counts.columns = ["tipo", "cantidad"]
 
+    # Datos del pool original (solo informativo)
+    pool_path = ROOT / "contratos" / "proyectos_secop1_lite.csv"
+    n_pool = len(pd.read_csv(pool_path)) if pool_path.exists() else 0
+
     return {
         "modelo": MODEL_META,
-        "total_contratos": len(contratos),
+        "total_contratos": n_contratos,
+        "contratos_pool_secop1": n_pool,
+        "contratos_secop2_incluidos": 5,
         "sobrecosto_promedio": round(sc.mean(), 1),
         "sobrecosto_mediana": round(sc.median(), 1),
         "porcentaje_alto_riesgo": round((sc > 25).mean(), 4),

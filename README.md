@@ -17,13 +17,23 @@ SECOP I/II API → Extracción → Matrices de Riesgo (PDF → LLM → CSV)
 
 El pipeline descarga contratos de obra pública desde las APIs de SECOP, extrae sus matrices de riesgo, entrena un modelo Ridge para estimar el sobrecosto porcentual, y despliega un dashboard interactivo para predicción y seguimiento.
 
+## Datos del Proyecto
+
+| Conjunto | Contratos | Descripción |
+|---|---|---|
+| Pool SECOP I (`proyectos_secop1_lite.csv`) | 1,560 | Todos los contratos de obra pública con sobrecosto > 0 y filtros aplicados |
+| **Entrenamiento real** (`matriz_clean.csv`) | **350** | Los que tienen matriz de riesgo extraída (excluye 1 outlier con 808%) |
+| SECOP II incluidos | 5 | Contratos complementarios dentro de los 350 (C-110 a C-114) |
+
+> El modelo solo puede entrenarse con los contratos que tienen matriz de riesgo (necesita descripciones, probabilidades, impactos, etc. como features). Las matrices se extrajeron manualmente: descarga de PDF desde contratos.gov.co → OCR → LLM.
+
 ## Resultados del Modelo
 
 | Métrica | Valor |
 |---|---|
 | R² (CV anidada, 33 features) | 0.103 ± 0.080 |
 | RMSE (CV) | 15.6 ± 1.1 pp |
-| MAE (todos los datos) | ~11 pp |
+| MAE (contratos de entrenamiento) | ~11 pp |
 | AUC (LogisticRegression CV) | ~0.70 |
 | Accuracy (clasificación binaria) | ~65% |
 
@@ -135,9 +145,9 @@ En la sidebar se configuran año, IPC y TRM del contrato. Solo editables en la v
 
 ## Source Data
 
-- **SECOP I** (`f789-7hwg`): 4,723 contratos de obra pública históricos (1960-2025)
-- **SECOP II** (`jbjy-vk9h`): 5 contratos complementarios con sobrecosto real
-- **Matriz de Riesgos** (`docs/matriz_clean.csv`): 6,525 riesgos de 351 contratos con 20 columnas normalizadas
+- **SECOP I** (`f789-7hwg`): Pool de 1,560 contratos de obra pública con sobrecosto > 0 (de 4,723 filtrados)
+- **SECOP II** (`jbjy-vk9h`): 5 contratos complementarios dentro del entrenamiento (C-110 a C-114)
+- **Matriz de Riesgos** (`docs/matriz_clean.csv`): 6,525 riesgos de **350 contratos** (entrenamiento real) con 20 columnas normalizadas
 - **Feature engineering**: ~150 features → selección de 33 (30 top TF-IDF/estadísticas + 3 variables macro)
 
 ## Stack

@@ -514,13 +514,15 @@ def _render_tab_entrenamiento():
     par = stats["porcentaje_alto_riesgo"]
     trm = stats["total_riesgos_matriz"]
     cm = stats["contratos_en_matriz"]
+    pool = stats.get("contratos_pool_secop1", 0)
+    secop2 = stats.get("contratos_secop2_incluidos", 0)
 
     st.html(f"""
     <div class="kpi-row">
-      {kpi_card("Contratos", f"{tc:,}", f"{tc} contratos reales", ("#4facfe", "#00f2fe"), True)}
+      {kpi_card("Entrenamiento", f"{tc:,}", f"de {pool} del pool SECOP I", ("#4facfe", "#00f2fe"), True)}
       {kpi_card("Sobrecosto Prom.", f"{sp:.1f}%", f"mediana: {sm:.1f}%", ("#EF4444", "#F97316"), sp < 25)}
       {kpi_card("Alto Riesgo (>25%)", f"{par*100:.0f}%", f"de {tc} contratos", ("#F39C12", "#FDB813"), par < 0.5)}
-      {kpi_card("Riesgos en Matriz", f"{trm:,}", f"{cm} contratos", ("#7B5CE4", "#b06ff2"), True)}
+      {kpi_card("Matriz de Riesgos", f"{trm:,}", f"{cm} contratos (+{secop2} SECOP II)", ("#7B5CE4", "#b06ff2"), True)}
     </div>
     """)
 
