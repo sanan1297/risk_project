@@ -870,7 +870,10 @@ def _render_predict():
             raw = uploaded.getvalue()
             df_orig = pd.read_csv(io.BytesIO(raw), encoding="utf-8-sig")
             file_name = uploaded.name
-            st.info(f"{len(df_orig)} riesgos · {df_orig['id_contrato'].nunique()} contratos")
+            n_r = len(df_orig); n_c = df_orig['id_contrato'].nunique()
+            r_word = "riesgo" if n_r == 1 else "riesgos"
+            c_word = "contrato" if n_c == 1 else "contratos"
+            st.info(f"{n_r} {r_word} · {n_c} {c_word}")
             ready = True
     else:
         st.markdown("""
@@ -890,7 +893,10 @@ def _render_predict():
         if texto_csv.strip():
             try:
                 df_orig = pd.read_csv(io.StringIO(texto_csv))
-                st.info(f"{len(df_orig)} riesgos · {df_orig['id_contrato'].nunique()} contratos")
+                n_r = len(df_orig); n_c = df_orig['id_contrato'].nunique()
+                r_word = "riesgo" if n_r == 1 else "riesgos"
+                c_word = "contrato" if n_c == 1 else "contratos"
+                st.info(f"{n_r} {r_word} · {n_c} {c_word}")
                 ready = True
             except Exception as e:
                 st.error(f":material/error: No se pudo interpretar el texto como CSV: {e}")
