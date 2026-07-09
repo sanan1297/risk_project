@@ -962,7 +962,7 @@ def _render_history():
                     is_alto = "ALTO" in alerta
                     badge_color = "#EF4444" if is_alto else "#1ABC9C"
                     with st.container(border=True):
-                        hcols = st.columns([2.2, 1, 1, 1, 0.5])
+                        hcols = st.columns([2.2, 1, 1, 1, 1])
                         with hcols[0]:
                             st.markdown(
                                 f'<span style="color: #000000; font-weight: bold; font-size: 1rem; margin-left:8px;">'
@@ -999,20 +999,21 @@ def _render_history():
                         with hcols[3]:
                             st.markdown(f'<div class="history-metric"><div class="label" style="color:{MUTED};">Real</div><div class="value" style="color:{TEXT_COLOR};">{real_str}</div></div>', unsafe_allow_html=True)
                         with hcols[4]:
-                            st.html('<div style="display:flex;gap:4px;align-items:center;padding-top:12px;">')
-                            if st.button(":material/edit:", key=f"edit_{hid}", help="Editar"):
-                                st.session_state[f"editando_{hid}"] = not st.session_state.get(f"editando_{hid}", False)
-                                st.rerun()
                             editando = st.session_state.get(f"editando_{hid}", False)
-                            if not editando:
-                                if st.button(":material/delete:", key=f"del_{hid}", help="Eliminar"):
-                                    try:
-                                        rr = requests.delete(f"{API_URL}/history/{hid}", timeout=10)
-                                        if rr.status_code == 200:
-                                            st.rerun()
-                                    except Exception:
-                                        pass
-                            st.html('</div>')
+                            btn_sub = st.columns([1, 1], gap="small")
+                            with btn_sub[0]:
+                                if st.button(":material/edit:", key=f"edit_{hid}", help="Editar"):
+                                    st.session_state[f"editando_{hid}"] = not editando
+                                    st.rerun()
+                            with btn_sub[1]:
+                                if not editando:
+                                    if st.button(":material/delete:", key=f"del_{hid}", help="Eliminar"):
+                                        try:
+                                            rr = requests.delete(f"{API_URL}/history/{hid}", timeout=10)
+                                            if rr.status_code == 200:
+                                                st.rerun()
+                                        except Exception:
+                                            pass
                         if editando:
                             evcols = st.columns([1, 1.5, 2, 1])
                             with evcols[0]:
