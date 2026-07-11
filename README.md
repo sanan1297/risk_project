@@ -54,10 +54,11 @@ El pipeline descarga contratos de obra pública desde las APIs de SECOP, extrae 
 ```
 risk_project/
 ├── backend/
-│   ├── main.py                   # FastAPI REST API (7 endpoints)
+│   ├── main.py                   # FastAPI REST API (8 endpoints)
 │   ├── schemas.py                # Pydantic models
 │   ├── predictor.py              # Ridge + LogisticRegression
 │   ├── feature_engineering.py    # Agregación de riesgos → features
+│   ├── quantitative_analysis.py  # Monte Carlo + Tornado + Desglose por riesgo
 │   ├── history.py                # SQLite CRUD
 │   ├── training_stats.py         # Estadísticas de entrenamiento
 │   └── feature_labels.py         # Labels legibles para features
@@ -96,8 +97,9 @@ risk_project/
 ### API Endpoints
 
 | Método | Endpoint | Descripción |
-|---|---|---|
+|---|---|---|---|
 | `POST` | `/predict` | Predecir sobrecosto desde CSV o texto |
+| `POST` | `/predict/montecarlo` | Simulación Monte Carlo + tornado por tipo + desglose por riesgo |
 | `GET` | `/history` | Historial paginado de predicciones |
 | `PUT` | `/history/{id}` | Guardar validación (sobrecosto real) |
 | `DELETE` | `/history/{id}` | Eliminar predicción |
@@ -134,7 +136,7 @@ uv run streamlit run frontend/streamlit_app.py
 
 1. Abrir `http://localhost:8501` en el navegador
 2. **Dashboard**: KPIs de uso del modelo y estadísticas de entrenamiento
-3. **Predicción**: Subir CSV o pegar texto con riesgos → obtener sobrecosto estimado, probabilidad de alto riesgo y factores explicativos
+3. **Predicción**: Subir CSV o pegar texto con riesgos → análisis **cualitativo** (sobrecosto estimado, alerta ALTO/MODERADO, factores explicativos) + análisis **cuantitativo** (simulación Monte Carlo, tornado de sensibilidad por tipo de riesgo, desglose de contribución por riesgo individual, percentiles, histograma)
 4. **Historial**: Ver predicciones anteriores, guardar validaciones con el valor real observado
 
 ### Parámetros IPC / TRM

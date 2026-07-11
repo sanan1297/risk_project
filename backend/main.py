@@ -6,10 +6,11 @@ import json
 
 from .feature_engineering import aggregate_risks, validate_input
 from .predictor import predict as run_prediction, MODEL_META
-from .schemas import PrediccionSalida, PrediccionHistorial, FactorInfo
+from .schemas import PrediccionSalida, PrediccionHistorial, FactorInfo, MonteCarloSalida
 from .feature_labels import label_feature
 from . import history
 from . import training_stats
+from . import quantitative_analysis
 
 app = FastAPI(
     title="Risk Predictor API",
@@ -125,6 +126,38 @@ def predict(
         ))
 
     return output
+
+
+@app.post("/predict/montecarlo", response_model=MonteCarloSalida)
+def predict_montecarlo(
+    file: UploadFile | None = File(None),
+    anio: int | None = Form(None),
+    ipc: float | None = Form(None),
+    trm: float | None = Form(None),
+    riesgos: str | None = Form(None),
+    n_iteraciones: int = Form(1000),
+    incluir_ruido: bool = Form(True),
+    valor_inicial: float | None = Form(None),
+):
+    df = _parse_input(file, riesgos)
+
+    errors = validate_input(df)
+    if errors:
+        raise HTTPException(422, {"errores": errors, "columnas_requeridas": REQUIRED_COLS})
+
+    if anio is not None and (anio < 2000 or anio > 2025) and (ipc is None or trm is None):
+        raise HTTPException(400, f"Año {anio} fuera de rango (2000-2025). Debes proporcionar ipc y trm manualmente.")
+
+    try:
+        result = quantitative_analysis.compute(
+            df, anio=anio, ipc=ipc, trm=trm,
+            n_iteraciones=n_iteraciones, incluir_ruido=incluir_ruido,
+            valor_inicial=valor_inicial,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Error en simulación Monte Carlo: {e}")
+
+    return result
 
 
 @app.get("/stats/usage")

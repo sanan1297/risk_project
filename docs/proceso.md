@@ -294,6 +294,7 @@ graph TB
         API[main.py<br/>REST API]
         FE[feature_engineering.py<br/>Agregación de riesgos]
         PREDICT[predictor.py<br/>Modelo Ridge + Logistic]
+        QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
         HISTDB[history.py<br/>SQLite CRUD]
         TRAIN[training_stats.py<br/>Estadísticas de entrenamiento]
         LABELS[feature_labels.py<br/>Labels legibles]
@@ -320,6 +321,7 @@ Exposición REST con FastAPI en `http://localhost:8000`:
 | Método | Endpoint | Parámetros | Respuesta | Propósito |
 |--------|----------|-------------|-----------|-----------|
 | `POST` | `/predict` | CSV file o texto + parámetros `(anio, ipc, trm)` | `PrediccionSalida` con factores, alerta, history_id | Ejecutar predicción sobre 1+N contratos |
+| `POST` | `/predict/montecarlo` | CSV + `(anio, ipc, trm, n_iteraciones, incluir_ruido, valor_inicial)` | `MonteCarloSalida` con percentiles, stats, histograma, tornado, desglose | Simulación Monte Carlo + análisis cuantitativo por tipo y por riesgo individual |
 | `GET` | `/history` | `page=1`, `page_size=20` | `{"data": [...], "total": N, "page": P, "paginas": M}` | Listar historial paginado |
 | `PUT` | `/history/{id}` | `sobrecosto_real`, `notas` (form) | `{"ok": true}` | Guardar validación (sobrecosto real observado) |
 | `DELETE` | `/history/{id}` | — | `{"ok": true}` | Eliminar una predicción del historial |
@@ -334,7 +336,7 @@ La app es single-page con navegación vía `?view=` en query params:
 | Vista | Ruta | Función | Contenido |
 |-------|------|---------|-----------|
 | Dashboard | `?view=dashboard` | `_render_dashboard()` | 2 tabs: "Uso del Modelo" (KPI cards, evolución, distribución alertas) y "Entrenamiento" (KPI cards, top features, tabla de riesgos por clase) |
-| Predicción | `?view=predict` | `_render_predict()` | Selector CSV/texto, parámetros en sidebar, procesamiento con spinner y cards de resultados |
+| Predicción | `?view=predict` | `_render_predict()` | Selector CSV/texto, parámetros en sidebar, análisis cualitativo (alerta + factores) + cuantitativo (Monte Carlo, tornado por tipo, distribución, desglose por riesgo) |
 | Historial | `?view=history` | `_render_history()` | Lista paginada (20/page) con contrato, alerta, Ridge, Prob., Real, botón eliminar y formulario de validación inline |
 
 ### 8.4 Flujo de Datos — Predicción
@@ -346,12 +348,13 @@ sequenceDiagram
     participant B as FastAPI
     participant FE as feature_engineering
     participant P as predictor
+    participant QA as quantitative_analysis
     participant DB as history.db
 
     U->>F: Sube CSV o pega texto
     F->>F: Valida + calcula n_riesgos
     U->>F: Click "Procesar"
-    F->>F: 🌀 spinner
+    F->>F: 🌀 spinner (cualitativo)
     F->>B: POST /predict (file + params)
     B->>FE: aggregate_risks(df)
     FE-->>B: features + id_contrato
@@ -360,9 +363,18 @@ sequenceDiagram
     B->>DB: INSERT predicción
     DB-->>B: history_id
     B-->>F: PrediccionSalida
-    F->>F: 🌀 spinner done
     F-->>U: Cards con resultado + factores
-    Note over F: Formulario "Registrar validación"<br/>para guardar sobrecosto real
+    Note over F: Análisis cualitativo listo
+
+    F->>F: 🌀 spinner (cuantitativo)
+    F->>B: POST /predict/montecarlo (file + params)
+    B->>FE: aggregate_risks(df)
+    B->>QA: compute(df, n_iteraciones, ...)
+    QA->>P: Ridge (N iteraciones + tornado + desglose)
+    P-->>QA: predicciones
+    QA-->>B: percentiles, stats, tornado, desglose
+    B-->>F: MonteCarloSalida
+    F-->>U: Tabla tornado + distribución + desglose por riesgo
 ```
 
 ### 8.5 Flujo de Datos — Dashboard
@@ -584,10 +596,11 @@ erDiagram
 ```
 risk_project/
 ├── backend/
-│   ├── main.py                   # FastAPI REST API (7 endpoints)
-│   ├── schemas.py                # Pydantic models (FactorInfo, PrediccionSalida, PrediccionHistorial)
+│   ├── main.py                   # FastAPI REST API (8 endpoints)
+│   ├── schemas.py                # Pydantic models (FactorInfo, PrediccionSalida, PrediccionHistorial, MonteCarloSalida)
 │   ├── feature_engineering.py    # Agregación de riesgos → features del modelo
 │   ├── predictor.py              # Carga de modelos + predicción (Ridge + Logistic)
+│   ├── quantitative_analysis.py  # Monte Carlo, tornado por tipo, desglose por riesgo
 │   ├── history.py                # CRUD SQLite + stats agregados
 │   ├── training_stats.py         # Estadísticas del dataset de entrenamiento
 │   └── feature_labels.py         # Labels legibles para features técnicas

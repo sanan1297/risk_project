@@ -23,6 +23,52 @@ class PrediccionSalida(BaseModel):
     history_id: int | None = Field(default=None, description="ID en el historial local")
 
 
+class RiesgoContribucion(BaseModel):
+    riesgo: str = Field(..., description="Descripción del riesgo")
+    tipo: str = Field(default="")
+    categoria: str = Field(default="")
+    probabilidad: int = Field(..., description="Valor de probabilidad (1-5)")
+    impacto: int = Field(..., description="Valor de impacto (1-5)")
+    peso_contribucion: float = Field(..., description="Peso proporcional del riesgo (0-1)")
+    contribucion_porcentaje: float = Field(..., description="Contribución al sobrecosto en pp")
+
+
+class ItemTornado(BaseModel):
+    riesgo: str = Field(..., description="Descripción del riesgo")
+    tipo: str = Field(default="")
+    categoria: str = Field(default="")
+    probabilidad_original: int = Field(..., description="Valor de probabilidad original (1-5)")
+    impacto_original: int = Field(..., description="Valor de impacto original (1-5)")
+    prediccion_alta: float = Field(..., description="Predicción si el riesgo sube 1")
+    prediccion_baja: float = Field(..., description="Predicción si el riesgo baja 1")
+    swing: float = Field(..., description="Diferencia absoluta entre alta y baja")
+    direccion: str = Field(..., description="aumenta o disminuye")
+
+
+class BinHistograma(BaseModel):
+    bin_inicio: float = Field(..., description="Inicio del bin")
+    bin_fin: float = Field(..., description="Fin del bin")
+    frecuencia: int = Field(..., description="Número de simulaciones en este bin")
+
+
+class MonteCarloSalida(BaseModel):
+    prediccion_central: float = Field(..., description="Predicción base del modelo Ridge (%)")
+    percentiles: dict[str, float] = Field(..., description="Percentiles P5-P95 (%)")
+    stats: dict[str, float] = Field(..., description="Estadísticas de la simulación (%)")
+    histograma: list[BinHistograma] = Field(..., description="Histograma de 20 bins (%)")
+    tornado: list[ItemTornado] = Field(..., description="Análisis de tornado por riesgo (%)")
+    riesgos: list[RiesgoContribucion] = Field(..., description="Desglose de contribución por riesgo (%)")
+    n_simulaciones: int = Field(default=1000, description="Número de iteraciones MC")
+    rmse: float = Field(default=16.0, description="RMSE del modelo usado como ruido")
+    ruido_incluido: bool = Field(default=True, description="Si se incluyó ruido gaussiano RMSE")
+    valor_inicial: float | None = Field(default=None, description="Valor inicial del contrato (COP)")
+    percentiles_cop: dict[str, float] | None = Field(default=None, description="Percentiles P5-P95 en COP")
+    stats_cop: dict[str, float] | None = Field(default=None, description="Estadísticas en COP")
+    histograma_cop: list[dict] | None = Field(default=None, description="Histograma en COP")
+    tornado_cop: list[dict] | None = Field(default=None, description="Tornado en COP")
+    riesgos_cop: list[dict] | None = Field(default=None, description="Desglose en COP")
+
+
 class PrediccionHistorial(BaseModel):
     id: int
     created_at: str

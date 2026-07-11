@@ -734,7 +734,8 @@ def _mostrar_resultados(resp, df_original):
         return
 
     n_ctos = len(results)
-    st.markdown(f'<div class="chart-title" style="margin-bottom:0.75rem; color: #000000;">Resultados</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="chart-title" style="margin-bottom:0.75rem; color: #000000;">Análisis Cualitativo - Alertas</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="chart-title" style="margin-bottom:1rem; color: #000000;"></div>', unsafe_allow_html=True)
 
     # --- KPIs (fuera de las tarjetas) ---
     kpi_val = st.columns(3)
@@ -823,11 +824,11 @@ def _mostrar_resultados(resp, df_original):
     {pred:.1f}%
 </div>
 ''', unsafe_allow_html=True)
-                st.markdown(f"#### :{color}[**Sobrecosto estimado**]")
+                st.markdown(f"#### :{color}[**Sobrecosto estimado por el modelo**]")
             
             with top_cols[1]:
                 st.markdown(f'<span style="color: #000000; font-weight: 700; padding-right: 200px;">Prob. riesgo alto</span>', unsafe_allow_html=True)
-                meta_cols = st.columns([1, 4])
+                meta_cols = st.columns([2, 4])
                 with meta_cols[0]:
                     st.markdown(f"#### :{color}[{pct:.0f}%]")
                 with meta_cols[1]:
@@ -890,24 +891,19 @@ def _mostrar_resultados(resp, df_original):
             
                                                  
 def _render_predict():
-    # ✅ CORRECCIÓN: CSS para forzar el color negro del st.radio
     st.markdown("""
     <style>
-        /* Forzamos el texto de las opciones del radio a color negro */
         div[data-testid="stRadio"] div[role="radiogroup"] label p {
             color: #000000 !important;
         }
-        /* Forzamos el borde de los botones a negro cuando no están seleccionados */
         div[data-testid="stRadio"] div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] {
             color: #000000 !important;
         }
     </style>
     """, unsafe_allow_html=True)
 
-    # ABRIR TARJETA Y TÍTULO NEGRO
     st.markdown(f'<div class="pred-card"><div style="font-size: 24px; font-weight: 700; color: #000000; margin-bottom: 15px;">Predecir Sobrecosto</div>', unsafe_allow_html=True)
-    
-    # ELIMINAMOS "theme='light'" porque no existe. El CSS de arriba hará el trabajo.
+
     input_mode = st.radio(
         "Método de entrada", 
         ["Subir CSV", "Pegar texto"],
@@ -929,9 +925,7 @@ def _render_predict():
             df_orig = pd.read_csv(io.BytesIO(raw), encoding="utf-8-sig")
             file_name = uploaded.name
             n_r = len(df_orig); n_c = df_orig['id_contrato'].nunique()
-            r_word = "riesgo" if n_r == 1 else "riesgos"
-            c_word = "contrato" if n_c == 1 else "contratos"
-            st.info(f"{n_r} {r_word} · {n_c} {c_word}")
+            st.info(f"{n_r} {'riesgo' if n_r == 1 else 'riesgos'} · {n_c} {'contrato' if n_c == 1 else 'contratos'}")
             ready = True
     else:
         st.markdown("""
@@ -940,7 +934,7 @@ def _render_predict():
                 id_contrato,descripcion_riesgo,probabilidad,impacto,tipo,categoria
             </div>
             <br>
-                """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
         texto_csv = st.text_area(
             "Contenido CSV", height=160,
             placeholder="id_contrato,descripcion_riesgo,probabilidad,impacto,tipo,categoria",
@@ -952,13 +946,44 @@ def _render_predict():
             try:
                 df_orig = pd.read_csv(io.StringIO(texto_csv))
                 n_r = len(df_orig); n_c = df_orig['id_contrato'].nunique()
-                r_word = "riesgo" if n_r == 1 else "riesgos"
-                c_word = "contrato" if n_c == 1 else "contratos"
-                st.info(f"{n_r} {r_word} · {n_c} {c_word}")
+                st.info(f"{n_r} {'riesgo' if n_r == 1 else 'riesgos'} · {n_c} {'contrato' if n_c == 1 else 'contratos'}")
                 ready = True
             except Exception as e:
                 st.error(f":material/error: No se pudo interpretar el texto como CSV: {e}")
                 ready = False
+
+    st.markdown('<hr style="margin:1rem 0;">', unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+        .st-key-vi_val label, .st-key-mc_iter label { color: #000000 !important; font-weight: 600 !important; }
+        .st-key-vi_val input, .st-key-mc_iter input { background-color: #FFFFFF !important; color: #000000 !important; }
+        .st-key-vi_val button, .st-key-mc_iter button { background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #CBD5E1 !important; }
+        .st-key-vi_val button:hover, .st-key-mc_iter button:hover { background-color: #F1F5F9 !important; }
+
+        div[data-testid="stCheckbox"] { padding-top: 24px !important; }
+        div[data-testid="stCheckbox"] label p { color: #000000 !important; font-weight: 500 !important; }
+        div[data-testid="stCheckbox"] label span { color: #000000 !important; font-weight: 500 !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    mc_row = st.columns([3, 2, 2, 1.5, 4])
+    with mc_row[0]:
+        st.markdown('<div style="margin-top: 1rem;">', unsafe_allow_html=True)
+    with mc_row[1]:
+        vi_val = st.number_input(
+            "Valor inicial (COP)",
+            value=0.0, min_value=0.0, step=1_000_000.0, format="%.0f", key="vi_val",
+        )
+        if vi_val > 0:
+            st.caption(f"$ {vi_val:,.0f}".replace(",", "."))
+    with mc_row[2]:
+        mc_iter = st.number_input("Iteraciones", value=1000, min_value=100, max_value=10000, step=500, key="mc_iter")
+    with mc_row[3]:
+        incluir_mc = st.checkbox("Incluir Monte Carlo", value=True, key="incluir_mc")
+    with mc_row[4]:
+        mc_ruido = st.checkbox("Ruido RMSE", value=True, key="mc_ruido")
+
+    st.markdown('<p style="color:#000000;font-size:0.8rem;margin:0 0 0.5rem 0;">Aviso: Primero carga el análisis cualitativo (alertas), posteriormente el cuantitativo (Impacto Monetario por Riesgo).</p>', unsafe_allow_html=True)
 
     _, btn_col, _ = st.columns([2.5, 1, 2.5])
     with btn_col:
@@ -972,8 +997,23 @@ def _render_predict():
                 resp = _call_api(data_bytes=raw, text_data=texto_csv, filename=file_name)
             if resp is not None:
                 _mostrar_resultados(resp, df_orig)
+
+            if incluir_mc:
+                with st.spinner(f":material/sync: Ejecutando {mc_iter} simulaciones Monte Carlo..."):
+                    mc_resp = _call_mc_api(
+                        data_bytes=raw, text_data=texto_csv, filename=file_name,
+                        n_iteraciones=mc_iter, incluir_ruido=mc_ruido,
+                        valor_inicial=vi_val if vi_val > 0 else None,
+                    )
+                if mc_resp is not None and mc_resp.status_code == 200:
+                    st.session_state.mc_data = mc_resp.json()
+                    _mostrar_resultados_mc(st.session_state.mc_data)
+                elif mc_resp is not None:
+                    st.error(f":material/error: Error en MC: {mc_resp.status_code}")
+
+    elif "mc_data" in st.session_state:
+        _mostrar_resultados_mc(st.session_state.mc_data)
                     
-    # CIERRE DE LA TARJETA
     st.markdown('</div></div>', unsafe_allow_html=True)
     st.html('<div style="height: 20px;"></div>')
 # ─── HISTORIAL ─────────────────────────────────────────
@@ -1114,6 +1154,262 @@ def _render_history():
     except requests.ConnectionError:
         st.error(":material/cloud_off: Backend no disponible.")
     st.html("</div>")
+
+
+# ─── MONTE CARLO (helpers) ──────────────────────────────
+def _fmt_cop(val):
+    if val is None:
+        return None
+    if abs(val) >= 1_000_000_000:
+        return f"${val/1_000_000_000:,.2f}B"
+    if abs(val) >= 1_000_000:
+        return f"${val/1_000_000:,.2f}M"
+    if abs(val) >= 1_000:
+        return f"${val/1_000:,.1f}K"
+    return f"${val:,.0f}"
+
+
+def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ruido=True, valor_inicial=None):
+    files, form = None, {}
+    if data_bytes is not None:
+        files = {"file": (filename or "datos.csv", data_bytes, "text/csv")}
+    elif text_data is not None:
+        form["riesgos"] = text_data
+    if anio_sel is not None:
+        form["anio"] = str(anio_sel)
+    if ipc_val is not None:
+        form["ipc"] = str(ipc_val)
+    if trm_val is not None:
+        form["trm"] = str(trm_val)
+    form["n_iteraciones"] = str(n_iteraciones)
+    form["incluir_ruido"] = str(incluir_ruido).lower()
+    if valor_inicial is not None:
+        form["valor_inicial"] = str(valor_inicial)
+    try:
+        return requests.post(f"{API_URL}/predict/montecarlo", files=files, data=form, timeout=60)
+    except requests.ConnectionError:
+        st.error(":material/cloud_off: Backend no disponible.")
+        return None
+
+
+def _mostrar_resultados_mc(data: dict):
+    pred_central = data["prediccion_central"]
+    percentiles = data["percentiles"]
+    stats = data["stats"]
+    histograma = data["histograma"]
+    tornado = data["tornado"]
+    riesgos = data["riesgos"]
+    n_sim = data["n_simulaciones"]
+    ruido_incl = data["ruido_incluido"]
+    tiene_cop = "valor_inicial" in data and data["valor_inicial"] is not None
+    vi = data.get("valor_inicial")
+
+    st.markdown("""
+    <style>
+        div[data-testid="stRadio"] div[role="radiogroup"] { display: flex; gap: 0; justify-content: center; }
+        div[data-testid="stRadio"] div[role="radiogroup"] label {
+            width: auto; text-align: center; padding: 8px 20px; margin: 0;
+            border: 1px solid #CBD5E1; border-radius: 0; background: #F8FAFC;
+            cursor: pointer; color: #000000 !important;
+        }
+        div[data-testid="stRadio"] div[role="radiogroup"] label:first-child { border-radius: 8px 0 0 8px; }
+        div[data-testid="stRadio"] div[role="radiogroup"] label:last-child { border-radius: 0 8px 8px 0; }
+        div[data-testid="stRadio"] div[role="radiogroup"] label:not(:last-child) { border-right: none; }
+        div[data-testid="stRadio"] div[role="radiogroup"] label[aria-checked="true"] {
+            background: #FFFFFF; border-color: #4facfe; font-weight: 700; color: #000000 !important;
+            box-shadow: inset 0 -2px 0 #4facfe;
+        }
+        div[data-testid="stRadio"] div[role="radiogroup"] label p { color: #000000 !important; font-weight: 500; }
+        div[data-testid="stRadio"] div[role="radiogroup"] label[aria-checked="true"] p { color: #000000 !important; font-weight: 700; }
+        .chart-card .chart-title { color: #000000 !important; }
+        .chart-card .chart-subtitle { color: #374151 !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<hr style="margin:1.5rem 0 1rem 0;border:0;border-top:2px solid #E2E8F0;">', unsafe_allow_html=True)
+    st.markdown(f'<div class="chart-title" style="margin-bottom:1.2rem; color: #000000;">Análisis Cuantitativo — Impacto Monetario por Riesgo</div>', unsafe_allow_html=True)
+
+    if tiene_cop and vi:
+        st.markdown(f'<p style="color:#000000;font-size:0.85rem;margin:0;">Valor inicial del contrato: {_fmt_cop(vi)} COP  |  {n_sim} simulaciones  |  {"Ruido RMSE incluido" if ruido_incl else "Solo perturbación de inputs"}</p>', unsafe_allow_html=True)
+        st.markdown(f'<div class="chart-title" style="margin-bottom:1.2rem; color: #000000;"></div>', unsafe_allow_html=True)
+        
+    # ─── Tabla de impacto por riesgo (tornado en COP + %) ───
+    if tiene_cop:
+        tdata = data["tornado"]
+        tdata_cop = data["tornado_cop"]
+    else:
+        tdata = tornado
+        tdata_cop = None
+    if tdata:
+        df_t = pd.DataFrame(tdata)
+        rows_html = ""
+        for idx, r in df_t.iterrows():
+            riesgo = r["riesgo"]
+            prob = int(r["probabilidad_original"]) if "probabilidad_original" in r and pd.notna(r["probabilidad_original"]) else "-"
+            imp = int(r["impacto_original"]) if "impacto_original" in r and pd.notna(r["impacto_original"]) else "-"
+            direccion = r["direccion"]
+            swing_val = r["swing"]
+            if tiene_cop:
+                rc = tdata_cop[idx]
+                alta = f"{_fmt_cop(rc['prediccion_alta'])} ({r['prediccion_alta']:.1f}%)"
+                baja = f"{_fmt_cop(rc['prediccion_baja'])} ({r['prediccion_baja']:.1f}%)"
+                swing = f"{_fmt_cop(rc['swing'])} ({r['swing']:.2f}pp)"
+                bar_swing = rc["swing"]
+            else:
+                alta = f"{r['prediccion_alta']:.1f}%"
+                baja = f"{r['prediccion_baja']:.1f}%"
+                swing = f"{r['swing']:.2f}pp"
+                bar_swing = swing_val
+            max_swing = max(abs(r2["swing"]) for r2 in (tdata_cop if tiene_cop else tdata))
+            bar_pct = min(abs(bar_swing) / (max_swing or 1) * 100, 100)
+            bar_color = "#EF4444" if direccion == "aumenta" else "#1ABC9C"
+
+            rows_html += f"""
+            <tr>
+                <td style="padding:10px 8px;font-weight:600;color:#000;">{riesgo}</td>
+                <td style="padding:10px 8px;text-align:center;color:#000;">{prob}</td>
+                <td style="padding:10px 8px;text-align:center;color:#000;">{imp}</td>
+                <td style="padding:10px 8px;text-align:center;color:#EF4444;font-weight:700;">{alta}</td>
+                <td style="padding:10px 8px;text-align:center;color:#1ABC9C;font-weight:700;">{baja}</td>
+                <td style="padding:10px 8px;text-align:center;color:#000;font-weight:700;">{swing}</td>
+                <td style="padding:10px 8px;">
+                    <div style="background:#E2E8F0;border-radius:4px;height:10px;width:100%;">
+                        <div style="background:{bar_color};width:{bar_pct:.0f}%;height:10px;border-radius:4px;"></div>
+                    </div>
+                </td>
+            </tr>"""
+
+        st.html(f"""
+        <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:4px;margin-bottom:1.25rem;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+            <thead>
+                <tr style="border-bottom:2px solid #E2E8F0;">
+                    <th style="padding:8px;text-align:left;color:#64748B;font-weight:600;">Tipo de Riesgo</th>
+                    <th style="padding:8px;text-align:center;color:#64748B;font-weight:600;">Prob</th>
+                    <th style="padding:8px;text-align:center;color:#64748B;font-weight:600;">Imp</th>
+                    <th style="padding:8px;text-align:center;color:#EF4444;font-weight:600;">Si suben todos (+1)</th>
+                    <th style="padding:8px;text-align:center;color:#1ABC9C;font-weight:600;">Si bajan todos (-1)</th>
+                    <th style="padding:8px;text-align:center;color:#64748B;font-weight:600;">Impacto neto</th>
+                    <th style="padding:8px;text-align:center;color:#64748B;font-weight:600;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+        </div>
+        """)
+
+    # ─── KPIs ───
+    fmt_pc = _fmt_cop(data["stats_cop"]["prediccion_central"]) if tiene_cop else f"{pred_central:.1f}%"
+    fmt_media = _fmt_cop(data["stats_cop"]["media"]) if tiene_cop else f"{stats['media']:.1f}%"
+    fmt_std = _fmt_cop(data["stats_cop"]["std"]) if tiene_cop else f"{stats['std']:.1f}pp"
+    fmt_p10 = _fmt_cop(data["percentiles_cop"]["P10"]) if tiene_cop else f"{percentiles['P10']:.1f}%"
+    fmt_p90 = _fmt_cop(data["percentiles_cop"]["P90"]) if tiene_cop else f"{percentiles['P90']:.1f}%"
+
+    kpi = st.columns(5)
+    with kpi[0]:
+        st.metric("Sobrecosto estimado", fmt_pc, border=True)
+        
+    with kpi[1]:
+        st.metric("Media MC", fmt_media, border=True)
+    with kpi[2]:
+        st.metric("Desv. estándar", fmt_std, border=True)
+    with kpi[3]:
+        st.metric("P10 (optimista)", fmt_p10, border=True)
+    with kpi[4]:
+        st.metric("P90 (pesimista)", fmt_p90, border=True)
+
+    # ─── Tabs secundarios ───
+    st.markdown(f'<div class="chart-title" style="margin-bottom:1.2rem; color: #000000;"></div>', unsafe_allow_html=True)
+    sel = st.radio("", ["📊 Distribución", "🔍 Contribución por Riesgo"], horizontal=True, label_visibility="collapsed", key="mc_tab_sel")
+
+    if sel == "📊 Distribución":
+        h = data["histograma_cop"] if tiene_cop else histograma
+        st.html(f'<div class="chart-card"><div class="chart-title">Distribución del Sobrecosto Total</div>'
+                f'<div class="chart-subtitle">{n_sim} simulaciones · {"COP" if tiene_cop else "%"}</div>')
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=[f"{_fmt_cop(b['bin_inicio']) if tiene_cop else f'{b['bin_inicio']:.0f}'}" for b in h],
+            y=[b["frecuencia"] for b in h],
+            marker_color=AZUL,
+            text=[b["frecuencia"] for b in h],
+            textposition="outside",
+            textfont=dict(color="#000000", size=9),
+        ))
+        max_freq = max(b["frecuencia"] for b in h)
+        if tiene_cop:
+            fig.add_vline(x=data["stats_cop"]["prediccion_central"], line_dash="dash", line_color=NARANJA,
+                          annotation_text=f"Central: {_fmt_cop(data['stats_cop']['prediccion_central'])}", annotation_position="top")
+            fig.add_vline(x=data["percentiles_cop"]["P10"], line_dash="dot", line_color=VERDE,
+                          annotation_text=f"P10: {_fmt_cop(data['percentiles_cop']['P10'])}", annotation_position="bottom")
+            fig.add_vline(x=data["percentiles_cop"]["P90"], line_dash="dot", line_color=VERDE,
+                          annotation_text=f"P90: {_fmt_cop(data['percentiles_cop']['P90'])}", annotation_position="bottom")
+        else:
+            fig.add_vline(x=pred_central, line_dash="dash", line_color=NARANJA,
+                          annotation_text=f"Central: {pred_central:.1f}%", annotation_position="top")
+            fig.add_vline(x=percentiles["P10"], line_dash="dot", line_color=VERDE,
+                          annotation_text=f"P10: {percentiles['P10']:.1f}%", annotation_position="bottom")
+            fig.add_vline(x=percentiles["P90"], line_dash="dot", line_color=VERDE,
+                          annotation_text=f"P90: {percentiles['P90']:.1f}%", annotation_position="bottom")
+        fig.update_layout(height=350, margin=dict(l=10, r=10, t=40, b=80),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#000000", size=11),
+            xaxis=dict(
+                gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR,
+                tickfont=dict(color="#000000", size=9),
+                tickangle=45,
+            ),
+            yaxis=dict(gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000"),
+                       range=[0, max_freq * 1.25]),
+            hovermode="x unified",
+            bargap=0.1,
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key="mc_hist")
+        st.html("</div>")
+
+        pdata = data["percentiles_cop"] if tiene_cop else percentiles
+        st.html(f'<div class="chart-card"><div class="chart-title">Percentiles</div></div>')
+        pcols = st.columns(7)
+        for i, (k, v) in enumerate(sorted(pdata.items())):
+            with pcols[i]:
+                fmt_v = _fmt_cop(v) if tiene_cop else f"{v:.1f}%"
+                st.metric(k, fmt_v, border=True)
+        st.html("</div>")
+
+    elif sel == "🔍 Contribución por Riesgo":
+        rdata = data["riesgos_cop"] if tiene_cop else riesgos
+        if not rdata:
+            st.info("No hay datos de desglose disponibles.")
+        else:
+            st.html(f'<div class="chart-card"><div class="chart-title">Contribución por Riesgo al Sobrecosto Total</div>'
+                    f'<div class="chart-subtitle">Distribución del sobrecosto estimado según peso relativo (prob × imp) de cada riesgo</div>')
+            df_r = pd.DataFrame(rdata)
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                y=df_r["riesgo"].tolist(),
+                x=df_r["contribucion_porcentaje"].tolist(),
+                orientation="h",
+                marker_color=VERDE,
+                text=[_fmt_cop(c) if tiene_cop else f"{c:.2f}pp" for c in df_r["contribucion_porcentaje"]],
+                textposition="outside",
+                textfont=dict(color="#000000", size=10),
+            ))
+            fig.update_layout(height=max(250, len(rdata) * 30), margin=dict(l=10, r=10, t=10, b=20),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#000000", size=11),
+                xaxis=dict(title=dict(text="COP" if tiene_cop else "pp", font=dict(color="#000000")), gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000")),
+                yaxis=dict(gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000", size=11)),
+                hovermode="y unified")
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key="mc_desglose")
+            st.html("</div>")
+
+            with st.expander("Ver tabla detallada"):
+                df_display = df_r[["riesgo", "tipo", "categoria", "probabilidad", "impacto", "peso_contribucion", "contribucion_porcentaje"]].copy()
+                if tiene_cop:
+                    df_display["contribucion_porcentaje"] = df_display["contribucion_porcentaje"].apply(_fmt_cop)
+                df_display.columns = ["Riesgo", "Tipo", "Categoría", "Prob", "Imp", "Peso", "Contribución"]
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
 
 
 # ─── RENDER ────────────────────────────────────────────
