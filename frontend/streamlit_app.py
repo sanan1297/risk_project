@@ -32,10 +32,13 @@ NARANJA = "#F39C12"
 
 view = st.query_params.get("view", "dashboard")
 
-st.markdown('<style>'
-    '[role="dialog"]{background:#F4F7FD!important}'
-    '[role="dialog"] [data-testid="stVerticalBlock"]{background:transparent!important}'
-    '</style>', unsafe_allow_html=True)
+st.markdown(
+    "<style>"
+    '[data-testid="stPopover"]{background:#F4F7FD!important}'
+    '[data-testid="stPopover"] [data-testid="stVerticalBlock"]{background:transparent!important}'
+    "</style>",
+    unsafe_allow_html=True,
+)
 
 st.html(f"""
 <style>
@@ -1130,12 +1133,11 @@ def _render_history():
                                             pass
                         vcols = st.columns([1, 2, 1])
                         with vcols[1]:
-                            ver_key = f"ver_full_{hid}"
-                            if st.button(":material/analytics: Ver completo", key=ver_key, use_container_width=True):
+                            with st.popover(":material/analytics: Ver completo", use_container_width=True):
                                 try:
                                     rr = requests.get(f"{API_URL}/history/{hid}", timeout=10)
                                     if rr.status_code == 200:
-                                        _dialogo_full_analysis(rr.json())
+                                        _render_full_analysis(rr.json())
                                 except Exception:
                                     pass
                         if editando:
@@ -1222,8 +1224,7 @@ def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ru
         return None
 
 
-@st.dialog("Análisis completo", width="large")
-def _dialogo_full_analysis(full: dict):
+def _render_full_analysis(full: dict):
     pred = full.get("prediccion_ridge", 0)
     prob = full.get("probabilidad_alto_riesgo", 0) * 100
     alerta = full.get("alerta", "")
