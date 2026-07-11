@@ -1218,6 +1218,12 @@ def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ru
 
 @st.dialog("Análisis completo", width="large")
 def _dialogo_full_analysis(full: dict):
+    st.markdown("""
+    <style>
+        div[data-testid="stDialog"] { background: #F4F7FD !important; }
+        div[data-testid="stDialog"] div[data-testid="stVerticalBlock"] { background: transparent !important; }
+    </style>
+    """, unsafe_allow_html=True)
     pred = full.get("prediccion_ridge", 0)
     prob = full.get("probabilidad_alto_riesgo", 0) * 100
     alerta = full.get("alerta", "")
