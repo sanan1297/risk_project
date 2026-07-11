@@ -32,11 +32,6 @@ NARANJA = "#F39C12"
 
 view = st.query_params.get("view", "dashboard")
 
-st.markdown('<style>'
-    '[role="dialog"]{background:#F4F7FD!important}'
-    '[role="dialog"] [data-testid="stVerticalBlock"]{background:transparent!important}'
-    '</style>', unsafe_allow_html=True)
-
 st.html(f"""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -1135,9 +1130,16 @@ def _render_history():
                                 try:
                                     rr = requests.get(f"{API_URL}/history/{hid}", timeout=10)
                                     if rr.status_code == 200:
-                                        _dialogo_full_analysis(rr.json())
+                                        st.session_state[f"full_{hid}"] = rr.json()
+                                        st.rerun()
                                 except Exception:
                                     pass
+                        if st.session_state.get(f"full_{hid}"):
+                            full = st.session_state[f"full_{hid}"]
+                            _render_full_analysis(full)
+                            if st.button(":material/close: Cerrar", key=f"close_full_{hid}", use_container_width=True):
+                                del st.session_state[f"full_{hid}"]
+                                st.rerun()
                         if editando:
                             evcols = st.columns([1, 1.5, 2, 1])
                             with evcols[0]:
@@ -1222,33 +1224,36 @@ def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ru
         return None
 
 
-@st.dialog("Análisis completo", width="large")
-def _dialogo_full_analysis(full: dict):
+def _render_full_analysis(full: dict):
+    st.markdown("---")
+    c1, c2 = st.columns([6, 1])
+    with c1:
+        st.markdown(f'<div style="color:#000;font-size:1rem;font-weight:600;">Análisis completo — {full.get("id_contrato","")}</div>', unsafe_allow_html=True)
     pred = full.get("prediccion_ridge", 0)
     prob = full.get("probabilidad_alto_riesgo", 0) * 100
     alerta = full.get("alerta", "")
     is_alto = "ALTO" in alerta
     badge_color = "#EF4444" if is_alto else "#1ABC9C"
     color = "red" if pred > 30 else ("orange" if pred > 15 else "green")
-    st.markdown(f'<div style="font-size:1.2rem;font-weight:700;margin-bottom:0.5rem;">{full.get("id_contrato","")}</div>', unsafe_allow_html=True)
     rc = st.columns([1, 1, 2])
     with rc[0]:
-        st.markdown(f'<div style="font-size:2.5rem;font-weight:900;color:{color};">{pred:.1f}%</div><span style="font-weight:600;">Sobrecosto estimado</span>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:2.5rem;font-weight:900;color:{color};">{pred:.1f}%</div><span style="color:#000;font-weight:600;">Sobrecosto estimado</span>', unsafe_allow_html=True)
     with rc[1]:
-        st.markdown(f'<div style="font-size:2rem;font-weight:800;color:{badge_color};">{prob:.0f}%</div><span style="font-weight:600;">Prob. alto riesgo</span>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:2rem;font-weight:800;color:{badge_color};">{prob:.0f}%</div><span style="color:#000;font-weight:600;">Prob. alto riesgo</span>', unsafe_allow_html=True)
         st.markdown(f'<span style="display:inline-block;background:{badge_color}22;color:{badge_color};padding:2px 12px;border-radius:100px;font-weight:700;">{alerta}</span>', unsafe_allow_html=True)
     with rc[2]:
         fa = full.get("factores_aumentan", [])[:4]
         fd = full.get("factores_disminuyen", [])[:4]
         parts_html = '<div style="display:flex;gap:20px;">'
         if fa:
-            parts_html += '<div><div style="font-weight:600;">▲ Suben</div>' + ''.join(f'<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;border-bottom:1px solid #e0e0e0;"><span style="font-size:0.85rem;">{f["label"]}</span><span style="color:#DC2626;font-weight:700;">+{f["coef"]:.2f}</span></div>' for f in fa) + '</div>'
+            parts_html += '<div><div style="color:#000;font-weight:600;">▲ Suben</div>' + ''.join(f'<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;border-bottom:1px solid #e0e0e0;"><span style="color:#000;font-size:0.85rem;">{f["label"]}</span><span style="color:#DC2626;font-weight:700;">+{f["coef"]:.2f}</span></div>' for f in fa) + '</div>'
         if fd:
-            parts_html += '<div><div style="font-weight:600;">▼ Bajan</div>' + ''.join(f'<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;border-bottom:1px solid #e0e0e0;"><span style="font-size:0.85rem;">{f["label"]}</span><span style="color:#16A34A;font-weight:700;">{f["coef"]:.2f}</span></div>' for f in fd) + '</div>'
+            parts_html += '<div><div style="color:#000;font-weight:600;">▼ Bajan</div>' + ''.join(f'<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;border-bottom:1px solid #e0e0e0;"><span style="color:#000;font-size:0.85rem;">{f["label"]}</span><span style="color:#16A34A;font-weight:700;">{f["coef"]:.2f}</span></div>' for f in fd) + '</div>'
         parts_html += '</div>'
         st.markdown(parts_html, unsafe_allow_html=True)
     if full.get("resultado_json"):
         _mostrar_resultados_mc(full["resultado_json"])
+    st.markdown("---")
 
 
 
