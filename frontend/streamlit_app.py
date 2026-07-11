@@ -32,6 +32,11 @@ NARANJA = "#F39C12"
 
 view = st.query_params.get("view", "dashboard")
 
+st.markdown('<style>'
+    '[role="dialog"]{background:#F4F7FD!important}'
+    '[role="dialog"] [data-testid="stVerticalBlock"]{background:transparent!important}'
+    '</style>', unsafe_allow_html=True)
+
 st.html(f"""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -79,8 +84,7 @@ st.html(f"""
     border: 1px solid {BORDER_COLOR};
     margin-bottom: 1.25rem;
   }}
-  .stDialog {{ background: #F4F7FD !important; }}
-  div[data-testid="stDialog"] {{ background: #F4F7FD !important; }}
+
   .chart-title {{ font-size: 1rem; font-weight: 600; color: {TEXT_COLOR}; margin-bottom: 0.25rem; }}
   .chart-subtitle {{ font-size: 0.8rem; color: {MUTED}; margin-bottom: 0.75rem; }}
 
@@ -1220,7 +1224,6 @@ def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ru
 
 @st.dialog("Análisis completo", width="large")
 def _dialogo_full_analysis(full: dict):
-
     pred = full.get("prediccion_ridge", 0)
     prob = full.get("probabilidad_alto_riesgo", 0) * 100
     alerta = full.get("alerta", "")
@@ -1246,6 +1249,7 @@ def _dialogo_full_analysis(full: dict):
         st.markdown(parts_html, unsafe_allow_html=True)
     if full.get("resultado_json"):
         _mostrar_resultados_mc(full["resultado_json"])
+
 
 
 def _mostrar_resultados_mc(data: dict):
