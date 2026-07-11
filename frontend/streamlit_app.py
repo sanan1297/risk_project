@@ -1037,7 +1037,7 @@ def _render_history():
 
     if "hist_page" not in st.session_state:
         st.session_state.hist_page = 1
-    page_size = 20
+    page_size = 15
 
     try:
         with st.spinner(":material/history: Cargando historial..."):
@@ -1136,7 +1136,7 @@ def _render_history():
                                     pass
                         if st.session_state.get(f"full_{hid}"):
                             full = st.session_state[f"full_{hid}"]
-                            _render_full_analysis(full)
+                            _render_full_analysis(full, hid)
                             if st.button(":material/close: Cerrar", key=f"close_full_{hid}", use_container_width=True):
                                 del st.session_state[f"full_{hid}"]
                                 st.rerun()
@@ -1224,7 +1224,7 @@ def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ru
         return None
 
 
-def _render_full_analysis(full: dict):
+def _render_full_analysis(full: dict, uid: str = ""):
     st.markdown("---")
     c1, c2 = st.columns([6, 1])
     with c1:
@@ -1252,12 +1252,12 @@ def _render_full_analysis(full: dict):
         parts_html += '</div>'
         st.markdown(parts_html, unsafe_allow_html=True)
     if full.get("resultado_json"):
-        _mostrar_resultados_mc(full["resultado_json"])
+        _mostrar_resultados_mc(full["resultado_json"], uid)
     st.markdown("---")
 
 
 
-def _mostrar_resultados_mc(data: dict):
+def _mostrar_resultados_mc(data: dict, uid: str = ""):
     pred_central = data["prediccion_central"]
     percentiles = data["percentiles"]
     stats = data["stats"]
@@ -1387,7 +1387,7 @@ def _mostrar_resultados_mc(data: dict):
 
     # ─── Tabs secundarios ───
     st.markdown(f'<div class="chart-title" style="margin-bottom:1.2rem; color: #000000;"></div>', unsafe_allow_html=True)
-    sel = st.radio("", ["📊 Distribución", "🔍 Contribución por Riesgo"], horizontal=True, label_visibility="collapsed", key="mc_tab_sel")
+    sel = st.radio("", ["📊 Distribución", "🔍 Contribución por Riesgo"], horizontal=True, label_visibility="collapsed", key=f"mc_tab_sel_{uid}")
 
     if sel == "📊 Distribución":
         h = data["histograma_cop"] if tiene_cop else histograma
@@ -1430,7 +1430,7 @@ def _mostrar_resultados_mc(data: dict):
             hovermode="x unified",
             bargap=0.1,
         )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key="mc_hist")
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"mc_hist_{uid}")
         st.html("</div>")
 
         pdata = data["percentiles_cop"] if tiene_cop else percentiles
@@ -1466,7 +1466,7 @@ def _mostrar_resultados_mc(data: dict):
                 xaxis=dict(title=dict(text="COP" if tiene_cop else "pp", font=dict(color="#000000")), gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000")),
                 yaxis=dict(gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000", size=11)),
                 hovermode="y unified")
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key="mc_desglose")
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"mc_desglose_{uid}")
             st.html("</div>")
 
             with st.expander("Ver tabla detallada"):
