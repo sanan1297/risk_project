@@ -103,7 +103,7 @@ def compute() -> dict:
 
     return {
         "modelo": MODEL_META,
-        "total_contratos": n_contratos,
+        "total_contratos": n_contratos_raw,
         "contratos_raw": n_contratos_raw,
         "contratos_pool_secop1": n_pool,
         "contratos_secop2_incluidos": 5,

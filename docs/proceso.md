@@ -286,47 +286,49 @@ Tesis/
 graph TB
     subgraph Frontend["Frontend — Streamlit (frontend/streamlit_app.py)"]
         DASH[Dashboard<br/>Uso del Modelo + Entrenamiento]
-        PRED[Predicción<br/>CSV / Texto]
-        HIST[Historial<br/>Paginado + Validación]
+        PRED[Predicción<br/>CSV / Texto + MC]
+        HIST[Historial<br/>Paginado + Ver completo]
     end
 
     subgraph Backend["Backend — FastAPI (backend/)"]
         API[main.py<br/>REST API]
-        FE[feature_engineering.py<br/>Agregación de riesgos]
-        PREDICT[predictor.py<br/>Modelo Ridge + Logistic]
+        FE[feature_engineering.py<br/>Agregación de riesgos → 33 features]
+        PREDICT[predictor.py<br/>Ridge R² 0.149 + Logistic AUC 0.662]
         QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
-        HISTDB[history.py<br/>SQLite CRUD]
-        TRAIN[training_stats.py<br/>Estadísticas de entrenamiento]
+        HISTDB[history.py<br/>SQLite CRUD + resultado_json MC]
+        TRAIN[training_stats.py<br/>351 contratos, R², coeficientes]
         LABELS[feature_labels.py<br/>Labels legibles]
     end
 
     subgraph Data["Datos Estáticos"]
-        M[MODELOS<br/>ridge_regressor.pkl<br/>logistic_model.pkl<br/>coeficientes_ridge.csv<br/>ipc_trm.pkl]
+        M[MODELOS<br/>ridge_regressor.pkl<br/>ridge_classifier.pkl<br/>scaler.pkl<br/>feature_names.pkl<br/>coeficientes_ridge.csv<br/>ipc_trm.pkl]
         MAT[matriz_clean.csv<br/>6,525 riesgos<br/>351 contratos]
     end
 
     subgraph Storage["Almacenamiento Dinámico"]
-        DB[(history.db<br/>SQLite)]
+        DB[(history.db<br/>SQLite<br/>+ resultado_json)]
     end
 
-    Frontend -->|HTTP :8000| Backend
+    Frontend -->|HTTP :8003| Backend
     Backend --> Data
     Backend -->|lectura/escritura| Storage
 ```
 
 ### 8.2 Backend API (`backend/`)
 
-Exposición REST con FastAPI en `http://localhost:8000`:
+Exposición REST con FastAPI. El frontend apunta a `http://localhost:8003` (workaround: zombie PID 12248 ocupó el puerto 8000; requiere reinicio de máquina para liberarlo). Originalmente en puerto `:8000`.
 
 | Método | Endpoint | Parámetros | Respuesta | Propósito |
 |--------|----------|-------------|-----------|-----------|
 | `POST` | `/predict` | CSV file o texto + parámetros `(anio, ipc, trm)` | `PrediccionSalida` con factores, alerta, history_id | Ejecutar predicción sobre 1+N contratos |
-| `POST` | `/predict/montecarlo` | CSV + `(anio, ipc, trm, n_iteraciones, incluir_ruido, valor_inicial)` | `MonteCarloSalida` con percentiles, stats, histograma, tornado, desglose | Simulación Monte Carlo + análisis cuantitativo por tipo y por riesgo individual |
-| `GET` | `/history` | `page=1`, `page_size=20` | `{"data": [...], "total": N, "page": P, "paginas": M}` | Listar historial paginado |
-| `PUT` | `/history/{id}` | `sobrecosto_real`, `notas` (form) | `{"ok": true}` | Guardar validación (sobrecosto real observado) |
-| `DELETE` | `/history/{id}` | — | `{"ok": true}` | Eliminar una predicción del historial |
-| `DELETE` | `/history` | — | `{"ok": true}` | Limpiar todo el historial |
-| `GET` | `/stats/usage` | — | Agregados de `history.db` (total predicciones, % alto riesgo, serie temporal, etc.) | Dashboard de uso del modelo |
+| `POST` | `/predict/montecarlo` | CSV + `(anio, ipc, trm, n_iteraciones, incluir_ruido, valor_inicial, history_id)` | `MonteCarloSalida` con percentiles, stats, histograma, tornado, desglose (en % y COP) | Simulación Monte Carlo + análisis cuantitativo por tipo y por riesgo individual |
+| `GET` | `/history` | `page=1`, `page_size=15` | `{"data": [...], "total": N, "page": P, "paginas": M}` | Listar historial paginado |
+| `GET` | `/history/{id}` | — | Cualitativo + `resultado_json` completo | Obtener predicción individual con MC |
+| `GET` | `/history/{id}/resultados` | — | `resultado_json` completo del MC | Obtener solo resultados cuantitativos |
+| `PUT` | `/history/{id}` | `sobrecosto_real`, `notas` (form) | `{"status": "ok", "id": N}` | Guardar validación (sobrecosto real observado) |
+| `DELETE` | `/history/{id}` | — | `{"status": "ok", "id": N}` | Eliminar una predicción del historial |
+| `DELETE` | `/history` | — | `{"status": "ok"}` | Limpiar todo el historial |
+| `GET` | `/stats/usage` | — | Agregados de `history.db` (total predicciones, % alto riesgo, serie temporal, top factores, MC stats) | Dashboard de uso del modelo |
 | `GET` | `/stats/training` | — | Agregados de datos de entrenamiento + coeficientes del modelo | Dashboard de entrenamiento |
 
 ### 8.3 Frontend — Vistas (Streamlit, `frontend/streamlit_app.py`)
@@ -336,8 +338,8 @@ La app es single-page con navegación vía `?view=` en query params:
 | Vista | Ruta | Función | Contenido |
 |-------|------|---------|-----------|
 | Dashboard | `?view=dashboard` | `_render_dashboard()` | 2 tabs: "Uso del Modelo" (KPI cards, evolución, distribución alertas) y "Entrenamiento" (KPI cards, top features, tabla de riesgos por clase) |
-| Predicción | `?view=predict` | `_render_predict()` | Selector CSV/texto, parámetros en sidebar, análisis cualitativo (alerta + factores) + cuantitativo (Monte Carlo, tornado por tipo, distribución, desglose por riesgo) |
-| Historial | `?view=history` | `_render_history()` | Lista paginada (20/page) con contrato, alerta, Ridge, Prob., Real, botón eliminar y formulario de validación inline |
+| Predicción | `?view=predict` | `_render_predict()` | Selector CSV/texto, parámetros en sidebar, análisis cualitativo (alerta + factores) + cuantitativo (Monte Carlo con 1000 iteraciones, tornado por tipo de riesgo con swing real del modelo, histograma, desglose individual por peso prob×imp, valores en % y COP) |
+| Historial | `?view=history` | `_render_history()` | Lista paginada (15/page) con contrato, alerta, Ridge, Prob., Real, botón eliminar, formulario de validación inline, y botón "Ver análisis completo" (expande inline el MC + cualitativo) |
 
 ### 8.4 Flujo de Datos — Predicción
 
@@ -359,22 +361,25 @@ sequenceDiagram
     B->>FE: aggregate_risks(df)
     FE-->>B: features + id_contrato
     B->>P: predict(features)
-    P-->>B: predicciones + factores
+    P-->>B: Ridge % + prob + alerta + factores
     B->>DB: INSERT predicción
     DB-->>B: history_id
-    B-->>F: PrediccionSalida
+    B-->>F: PrediccionSalida (con history_id)
     F-->>U: Cards con resultado + factores
     Note over F: Análisis cualitativo listo
 
     F->>F: 🌀 spinner (cuantitativo)
-    F->>B: POST /predict/montecarlo (file + params)
+    F->>B: POST /predict/montecarlo (file + params + history_id)
     B->>FE: aggregate_risks(df)
-    B->>QA: compute(df, n_iteraciones, ...)
-    QA->>P: Ridge (N iteraciones + tornado + desglose)
-    P-->>QA: predicciones
-    QA-->>B: percentiles, stats, tornado, desglose
-    B-->>F: MonteCarloSalida
-    F-->>U: Tabla tornado + distribución + desglose por riesgo
+    B->>QA: compute(df_contrato, n_iteraciones, valor_inicial, ...)
+    QA->>QA: Monte Carlo: 1000 iteraciones, Δ∈{-1,0,+1} en prob/imp
+    QA->>QA: Ridge predict en cada iteración + ruido Gaussiano N(0, σ=16%)
+    QA->>QA: Tornado por tipo: perturba todos ±1, mide swing
+    QA->>QA: Desglose por riesgo: peso = (prob_i × imp_i) / Σ(prob×imp)
+    QA-->>B: percentiles, stats, histograma, tornado, desglose
+    B->>DB: UPDATE mc_iteraciones + resultado_json
+    B-->>F: MonteCarloSalida (% y COP si hay valor_inicial)
+    F-->>U: Histograma + tabla tornado + desglose por riesgo
 ```
 
 ### 8.5 Flujo de Datos — Dashboard
@@ -390,15 +395,15 @@ sequenceDiagram
     U->>F: Navega al Dashboard
     F->>F: 🌀 spinner "Cargando estadísticas..."
     F->>B: GET /stats/usage
-    B->>DB: SELECT COUNT, AVG, etc.
+    B->>DB: SELECT COUNT, AVG, serie_temporal, alertas, top_factores, histograma_riesgos, predicciones_vs_reales, MC stats
     DB-->>B: agregados
-    B-->>F: total_predicciones, %alto_riesgo, serie_temporal, etc.
-    F->>F: Renderiza KPI cards + gráficos
+    B-->>F: total_predicciones, %alto_riesgo, serie_temporal, top_factores, etc.
+    F->>F: Renderiza KPI cards + gráficos (evolución, alertas, factores, real vs predicho, MC)
     F->>B: GET /stats/training
-    B->>Files: Lee matriz.csv, coeficientes_ridge.csv, ipc_trm.pkl
+    B->>Files: Lee matriz_clean.csv, coeficientes_ridge.csv, ipc_trm.pkl
     Files-->>B: datos
-    B-->>F: total_contratos, top_features, tabla_riesgos, etc.
-    F->>F: Renderiza KPI cards + tabla + bar chart
+    B-->>F: total_contratos=351, contratos_pool_secop1, top_coeficientes, distribución sobrecosto, categorías, tipos, IPC/TRM, dist_n_riesgos, top_riesgosos
+    F->>F: Renderiza KPI cards + tabla + bar chart + distribución
     F-->>U: Dashboard completo
 ```
 
@@ -413,23 +418,29 @@ sequenceDiagram
 
     U->>F: Navega al Historial
     F->>F: 🌀 spinner "Cargando historial..."
-    F->>B: GET /history?page=1&page_size=20
+    F->>B: GET /history?page=1&page_size=15
     B->>DB: SELECT con LIMIT/OFFSET
-    DB-->>B: 20 registros + COUNT total
-    B-->>F: {data: [...], total: 120, pagina: 1, paginas: 6}
-    F->>F: Renderiza 20 tarjetas
+    DB-->>B: 15 registros + COUNT total
+    B-->>F: {data: [...], total: N, pagina: 1, paginas: M}
+    F->>F: Renderiza 15 tarjetas
     F-->>U: Lista paginada con navegación ◀/▶
     
     U->>F: Click "Siguiente ▶"
     F->>F: hist_page += 1
-    F->>B: GET /history?page=2&page_size=20
-    B-->>F: {data: [...], total: 120, pagina: 2}
-    F-->>U: Siguientes 20 registros
+    F->>B: GET /history?page=2&page_size=15
+    B-->>F: {data: [...], total: N, pagina: 2}
+    F-->>U: Siguientes 15 registros
+
+    U->>F: Click "Ver análisis completo"
+    F->>B: GET /history/{id} (cualitativo + resultado_json)
+    B-->>F: Datos completos con MC si existe
+    F->>F: Render inline: histograma, tornado, desglose riesgos
+    F-->>U: Vista expandida con botón "Cerrar"
     
     U->>F: Ingresa sobrecosto real + "Guardar"
     F->>B: PUT /history/{id} (form)
     B->>DB: UPDATE
-    B-->>F: {ok: true}
+    B-->>F: {status: "ok", id: N}
     F-->>U: ✅ Guardado
 ```
 
@@ -450,14 +461,17 @@ graph LR
     K --> L[normalizar.py]
     L --> M[matriz_clean.csv<br/>351 contratos]
     M --> N[Feature Engineering<br/>219 features → 33]
-    N --> O[Modelo Ridge<br/>R² 0.103<br/>350 contratos]
+    N --> O[Modelo Ridge + Logistic<br/>R² 0.149 · AUC 0.662<br/>350 contratos]
     O --> P[ridge_regressor.pkl<br/>coeficientes_ridge.csv]
-    P --> Q[FastAPI Backend<br/>/predict]
-    Q --> R[Streamlit Frontend<br/>Dashboard + Predicción]
+    P --> Q[FastAPI Backend<br/>/predict + /predict/montecarlo]
+    Q --> Q2[quantitative_analysis.py<br/>MC + Tornado + Desglose]
+    Q2 --> Q
+    Q --> R[Streamlit Frontend<br/>Dashboard + Predicción + Historial]
     R --> S[Usuario Final]
     
     style Q fill:#4facfe,stroke:#333,color:white
-    style R fill:#7B5CE4,stroke:#333,color:white
+    style Q2 fill:#6C5CE7,stroke:#333,color:white
+    style R fill:#00B894,stroke:#333,color:white
     style S fill:#1ABC9C,stroke:#333,color:white
 ```
 
@@ -470,12 +484,13 @@ graph TB
     end
 
     subgraph Server["Servidor Local"]
-        FA[FastAPI<br/>puerto 8000]
+        FA[FastAPI<br/>puerto 8000 → 8003<br/>zombie PID 12248]
         
         subgraph BackendMod["Módulos Backend"]
             FE[feature_engineering.py]
             PR[predictor.py]
-            H[history.py]
+            QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
+            H[history.py<br/>SQLite CRUD + stats + resultados MC]
             TS[training_stats.py]
             FL[feature_labels.py]
             SC[schemas.py]
@@ -483,19 +498,21 @@ graph TB
 
         subgraph DataFiles["Archivos de Datos"]
             M1[models/ridge_regressor.pkl]
-            M2[models/logistic_model.pkl]
-            M3[models/coeficientes_ridge.csv]
-            M4[models/ipc_trm.pkl]
+            M2[models/ridge_classifier.pkl]
+            M3[models/scaler.pkl]
+            M4[models/feature_names.pkl]
+            M5[models/coeficientes_ridge.csv]
+            M6[models/ipc_trm.pkl]
             MD[docs/matriz_clean.csv]
         end
 
         subgraph Runtime["En Tiempo de Ejecución"]
-            DB[(history.db)]
+            DB[(history.db<br/>SQLite)]
         end
     end
 
     Browser -->|HTTP :8501| ST
-    ST -->|HTTP :8000| FA
+    ST -->|HTTP :8003| FA
     FA --> BackendMod
     BackendMod --> DataFiles
     BackendMod --> Runtime
@@ -520,6 +537,8 @@ erDiagram
         TEXT factores_disminuyen "JSON"
         REAL sobrecosto_real
         TEXT notas
+        INTEGER mc_iteraciones
+        TEXT resultado_json "JSON completo del MC"
     }
 ```
 
@@ -533,12 +552,14 @@ erDiagram
 | `ipc` | REAL | IPC del año |
 | `trm` | REAL | TRM del año |
 | `prediccion_ridge` | REAL | Sobrecosto estimado por Ridge |
-| `probabilidad_alto_riesgo` | REAL | Probabilidad de sobrecosto > 25% |
+| `probabilidad_alto_riesgo` | REAL | Probabilidad de sobrecosto > 25% (0-1) |
 | `alerta` | TEXT | `ALTO RIESGO` o `RIESGO MODERADO` |
-| `factores_aumentan` | TEXT (JSON) | Top factores que aumentan el sobrecosto |
-| `factores_disminuyen` | TEXT (JSON) | Top factores que disminuyen el sobrecosto |
+| `factores_aumentan` | TEXT (JSON) | Top 5 factores que aumentan el sobrecosto |
+| `factores_disminuyen` | TEXT (JSON) | Top 5 factores que disminuyen el sobrecosto |
 | `sobrecosto_real` | REAL | Valor real observado (validación) |
 | `notas` | TEXT | Notas de validación |
+| `mc_iteraciones` | INTEGER | Número de iteraciones MC ejecutadas |
+| `resultado_json` | TEXT (JSON) | Resultado completo del MC (percentiles, histograma, tornado, desglose) |
 
 ---
 
@@ -546,19 +567,24 @@ erDiagram
 
 ### 9.1 Dashboard — Uso del Modelo
 
-- **KPI Cards:** Predicciones totales, Riesgos procesados, % Alto Riesgo, Sobrecosto Promedio
-  - Cada card tiene gradiente de color + badge con indicador ascendente/descendente
+- **KPI Cards:** Predicciones totales, Riesgos procesados, % Alto Riesgo, Sobrecosto Promedio, Predicciones con MC
+  - Cada card tiene gradiente de color + badge con indicador ascendente/descendiente
   - Badge con fondo blanco y texto verde/rojo para máxima legibilidad
 - **Gráficos:**
   - Evolución de predicciones (barras + línea de promedio)
   - Distribución de alertas (bar chart: ALTO RIESGO vs RIESGO MODERADO)
+  - Top factores (apariciones en las predicciones)
+  - Histograma de distribución de n_riesgos
+  - Dispersión real vs predicho (cuando hay validaciones)
 - **Spinner** de carga mientras se obtienen datos del backend
 
 ### 9.2 Dashboard — Entrenamiento
 
-- **KPI Cards:** Contratos de entrenamiento (con badge del pool SECOP I total), Sobrecosto promedio/mediana, % Alto Riesgo, Riesgos en matriz + contratos SECOP II
-- **Tabla:** Top 10 coeficientes del modelo Ridge (positivos y negativos)
-- **Gráfico:** Distribución de riesgos por clase (bar chart horizontal)
+- **KPI Cards:** Contratos de entrenamiento (351, con badge del pool SECOP I de 1,560), Sobrecosto promedio/mediana, % Alto Riesgo (>25%), Riesgos en matriz (6,525), SECOP II incluidos (5), R² del modelo, RMSE
+- **Tabla:** Top 10 coeficientes del modelo Ridge (positivos y negativos con label legible)
+- **Distribución:** Barras por rango de sobrecosto (0-10%, 10-25%, 25-50%, 50-100%, 100%+)
+- **Gráficos:** Distribución de riesgos por categoría (barras), por tipo (barras horizontales), top contratos por n_riesgos
+- **Serie IPC/TRM:** Línea temporal de inflación y TRM por año
 - **Spinner** de carga mientras se leen datos de entrenamiento
 
 ### 9.3 Predicción de Sobrecosto
@@ -575,10 +601,11 @@ erDiagram
 
 ### 9.4 Historial de Predicciones
 
-- **Lista paginada:** 20 registros por página
-- **Cada tarjeta muestra:** ID del contrato (con badge de alerta), fecha, n_riesgos, año, métricas (Ridge, Prob., Real), top factores, notas
-- **Navegación:** ◀ Anterior / Pág. X de Y · Mostrando registros 1–20 de 120 / Siguiente ▶
+- **Lista paginada:** 15 registros por página
+- **Cada tarjeta muestra:** ID del contrato (con badge de alerta), fecha, n_riesgos, año, métricas (Ridge, Prob., Real), top factores, notas, badge de MC si aplica
+- **Navegación:** ◀ Anterior / Pág. X de Y · Mostrando registros 1–15 de N / Siguiente ▶
 - **Acciones:** Eliminar individual, Limpiar todo, Guardar validación
+- **"Ver análisis completo":** Botón centrado que expande inline la vista cualitativa + cuantitativa completa (histograma MC, tornado por tipo, desglose individual). Usa `GET /history/{id}` y `GET /history/{id}/resultados`. Keys de Streamlit con sufijo `{uid}` (hid) para evitar duplicados.
 - **Spinner** de carga mientras se obtiene el historial
 
 ### 9.5 Experiencia de Usuario
@@ -596,26 +623,33 @@ erDiagram
 ```
 risk_project/
 ├── backend/
-│   ├── main.py                   # FastAPI REST API (8 endpoints)
-│   ├── schemas.py                # Pydantic models (FactorInfo, PrediccionSalida, PrediccionHistorial, MonteCarloSalida)
-│   ├── feature_engineering.py    # Agregación de riesgos → features del modelo
-│   ├── predictor.py              # Carga de modelos + predicción (Ridge + Logistic)
-│   ├── quantitative_analysis.py  # Monte Carlo, tornado por tipo, desglose por riesgo
-│   ├── history.py                # CRUD SQLite + stats agregados
-│   ├── training_stats.py         # Estadísticas del dataset de entrenamiento
+│   ├── main.py                   # FastAPI REST API (10 endpoints)
+│   ├── schemas.py                # Pydantic models (FactorInfo, PrediccionSalida, PrediccionHistorial, MonteCarloSalida, RiesgoContribucion, ItemTornado, BinHistograma)
+│   ├── predictor.py              # Carga de modelos + predicción (Ridge R² 0.149 + Logistic AUC 0.662)
+│   ├── feature_engineering.py    # Agregación de riesgos → 33 features del modelo
+│   ├── quantitative_analysis.py  # Monte Carlo (1000 iter), tornado por tipo (swing real), desglose individual (peso prob×imp)
+│   ├── history.py                # CRUD SQLite + stats agregados + almacenamiento resultado_json del MC
+│   ├── training_stats.py         # Estadísticas del dataset de entrenamiento (351 contratos)
 │   └── feature_labels.py         # Labels legibles para features técnicas
 ├── frontend/
-│   └── streamlit_app.py          # App Streamlit (~1050 líneas)
+│   └── streamlit_app.py          # App Streamlit (~1150 líneas)
 ├── models/
-│   ├── ridge_regressor.pkl       # Modelo Ridge final (R² 0.103)
-│   ├── logistic_model.pkl        # Clasificador binario (AUC 0.639)
+│   ├── ridge_regressor.pkl       # Modelo Ridge final (R² 0.149)
+│   ├── ridge_classifier.pkl      # Clasificador binario Logistic (AUC 0.662)
+│   ├── scaler.pkl                # StandardScaler ajustado
+│   ├── feature_names.pkl         # Lista de 33 feature names
 │   ├── coeficientes_ridge.csv    # Coeficientes del modelo para dashboard
 │   └── ipc_trm.pkl               # Diccionario IPC/TRM por año
-└── docs/
-    ├── proceso.md                # Este documento
-    ├── modelo.md                 # Resultados del modelo (R², RMSE, features)
-    ├── matriz.csv                # Dataset original de matrices de riesgo
-    └── matriz_clean.csv          # Versión normalizada
+├── scripts/
+│   └── train_final_model.py      # Entrenamiento reproducible del modelo final
+├── docs/
+│   ├── proceso.md                # Este documento
+│   ├── modelo.md                 # Resultados del modelo (R², RMSE, features)
+│   ├── matriz.csv                # Dataset original de matrices de riesgo
+│   └── matriz_clean.csv          # Versión normalizada (351 contratos, 6,525 riesgos)
+└── tests/
+    ├── plan_de_pruebas.md        # Plan y resultados de validación (Grupos A y B)
+    └── data/                     # CSVs de prueba por contrato
 ```
 
 ---
@@ -624,13 +658,17 @@ risk_project/
 
 1. ~~Feature engineering: agregar ~6,525 riesgos en 351 filas por contrato~~ ✅ `contratos_features.csv`
 2. ~~Feature reduction: top 30 por RF importance + control variables~~ ✅ `contratos_features_reducido.csv`
-3. ~~Benchmarking v1 (219 vars): Ridge campeón 0.074, todos evaluados~~ ✅ `modelado.ipynb`
+3. ~~Benchmarking v1 (219 vars): Ridge campeón R² 0.074, todos evaluados~~ ✅ `modelado.ipynb`
 4. ~~Benchmarking v2 (33 vars): Ridge campeón R² 0.103, GPU XGBoost probado~~ ✅ `modelo_final.ipynb`
 5. ~~Optimizaciones: log-target + interacciones descartadas (empeoran R²)~~ ✅ `modelo_final.ipynb` sección 11
 6. ~~Interpretación de coeficientes Ridge: top features identificadas~~ ✅ `modelo.md`
 7. ~~**Prototipo**: Streamlit dashboard para predicción interactiva de sobrecosto~~ ✅ Hecho
 8. ~~**Validación**: 5 contratos Grupo A (sanidad) + 5 contratos Grupo B (generalización)~~ ✅ `tests/plan_de_pruebas.md`
-9. **Mejoras potenciales**: autenticación, exportación a PDF, modo batch para múltiples contratos
+9. ~~**Análisis cuantitativo**: Monte Carlo + Tornado + Desglose por riesgo~~ ✅ `quantitative_analysis.py`
+10. ~~**"Ver completo" en Historial**: expandir inline MC + cualitativo desde historial~~ ✅ `streamlit_app.py`
+11. ~~**Paginación**: reducir de 20 a 15 registros por página~~ ✅ Hecho
+12. ~~**Arreglo bug training_stats**: `total_contratos` cambió a 351 (n_contratos_raw)~~ ✅ `training_stats.py`
+13. **Pendientes**: liberar puerto 8000 (zombie PID 12248), autenticación, exportación a PDF, modo batch para múltiples contratos
 
 ## 12. Pruebas de Validación
 
@@ -650,17 +688,17 @@ Metodología: cada contrato se cargó manualmente vía "Pegar texto" en el front
 Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `contratos_prueba.csv`.
 
 | Contrato | Año | Valor Inicial | Valor Final | Sobrecosto Real | Perfil |
-|---|---|---|---|---|---|
-| C-001 | 2018 | — | — | 28.6% | Medio |
-| C-010 | 2018 | — | — | 37.3% | Alto |
-| C-017 | 2019 | — | — | 53.1% | Muy Alto |
-| C-043 | 2021 | — | — | 2.2% | Muy Bajo |
-| C-128 | 2019 | — | — | 30.4% | Medio-Alto |
-| C-360 | 2019 | $1,888M | $2,080M | 10.14% | — |
-| C-361 | 2022 | $1,885M | $2,245M | 19.09% | — |
-| C-362 | 2021 | $1,877M | $1,959M | 4.38% | — |
+|---|---|---|---|---|---|---|
+| C-001 | 2018 | $16,148M | $20,760M | 28.6% | Medio |
+| C-010 | 2018 | $31,074M | $31,639M | 37.3% | Alto |
+| C-017 | 2019 | $23,880M | $36,561M | 53.1% | Muy Alto |
+| C-043 | 2021 | $13,586M | $13,886M | 2.2% | Muy Bajo |
+| C-128 | 2019 | $5,217M | $6,802M | 30.4% | Medio-Alto |
+| C-360 | 2019 | $1,889M | $2,080M | 10.14% | — |
+| C-361 | 2022 | $1,886M | $2,246M | 19.09% | — |
+| C-362 | 2021 | $1,878M | $1,960M | 4.38% | — |
 | C-363 | 2022 | $1,869M | $2,004M | 7.20% | — |
-| C-364 | 2023 | $1,868M | $2,258M | 20.83% | — |
+| C-364 | 2023 | $1,869M | $2,258M | 20.83% | — |
 
 ### 12.3 Resultados Grupo A — Prueba de Sanidad
 
@@ -727,4 +765,8 @@ El `modelado_v2.ipynb` (entrenado con ~150+ features) difiere del modelo API (33
 | 2026-07-07 | v11 | Feature engineering completo: `contratos_features.csv` (219 features, 351 contratos). Feature reduction: top 30 por RF importance + anio/ipc/trm → `contratos_features_reducido.csv`. Benchmarking v2 con 33 features: Ridge campeón (R² 0.103, RMSE 15.6, <1s). GPU XGBoost probado con `device='cuda'`. Optimizaciones (log-target, interacciones, limpieza de coefs) descartadas por empeorar R². Documento `docs/modelo.md` creado con resultados completos |
 | 2026-07-07 | v12 | **Prototipo funcional implementado.** Backend FastAPI con 7 endpoints. Frontend Streamlit con 3 vistas (Dashboard/Predicción/Historial). Feature engineering pipeline con preservación de `id_contrato`. Dashboard con 2 tabs (Uso + Entrenamiento) con KPI cards, gráficos Plotly, y datos reales. Predictor unificado (CSV/texto) con formulario de validación inline. Historial paginado (20 regs/pág) con navegación y spinners de carga. Arquitectura completa documentada con diagramas Mermaid. Código muerto limpiado. |
 | 2026-07-07 | v13 | **Pruebas de validación completadas.** 10 contratos (Grupo A sanidad + Grupo B generalización). MAE Grupo B: 11.3 pp. Validación contra notebook documenta diferencia de feature set (33 vs ~150 vars). Parámetros IPC/TRM bloqueados fuera de vista de predicción. Formulario de validación agregado al historial. BD poblada con valores reales. Plan de pruebas en `tests/plan_de_pruebas.md`. Sección 12 agregada a este documento. |
-| 2026-07-08 | v14 | **Corrección de métricas de entrenamiento.** El dashboard mostraba "1,560 contratos" (pool SECOP I total) cuando el modelo se entrenó realmente con 350. `training_stats.py` cambiado de `proyectos_secop1_lite.csv` a `matriz_clean.csv` agrupado por contrato. Añadidos campos `contratos_pool_secop1` y `contratos_secop2_incluidos`. Frontend actualizado para mostrar "Entrenamiento: 350 de 1,560 del pool" y "Matriz: +5 SECOP II". README aclarado. |
+| 2026-07-08 | v14 | **Corrección de métricas de entrenamiento.** El dashboard mostraba "1,560 contratos" (pool SECOP I total) cuando el modelo se entrenó realmente con 350. `training_stats.py` cambiado de `proyectos_secop1_lite.csv` a `matriz_clean.csv` agrupado por contrato. Añadidos campos `contratos_pool_secop1` y `contratos_secop2_incluidos`. Frontend actualizado para mostrar "Entrenamiento: 350 de 1,560 del pool". |
+| 2026-07-09 | v15 | **Re-entreno con R² 0.149.** Se eliminó `tfidf_cualquier`, se añadió `tfidf_obra`. Ridge mejoró de 0.103 a 0.149. LogisticRegression mejoró AUC de 0.639 a 0.662. Se creó `scripts/train_final_model.py` reproducible. Artefactos actualizados. |
+| 2026-07-09 | v16 | **Análisis cuantitativo implementado.** Módulo `quantitative_analysis.py` con Monte Carlo (1000 iter, Δ prob/imp discreto ±1, ruido Gaussiano σ=16%), tornado por tipo (swing real del modelo Ridge), desglose individual (peso=prob×imp/Σ). Endpoint `POST /predict/montecarlo` + schemas `MonteCarloSalida`. |
+| 2026-07-10 | v17 | **Historial con "Ver análisis completo".** Endpoints `GET /history/{id}` y `GET /history/{id}/resultados`. Botón inline en frontend que expande el MC sin modal. Keys de Streamlit con sufijo `{uid}` para evitar duplicados. Guardado de `resultado_json` en history.db. |
+| 2026-07-10 | v18 | **Arreglos finales.** Paginación reducida a 15. `training_stats.py`: `total_contratos` cambiado a 351 (n_contratos_raw). API_URL workaround a puerto 8003. Bug de conn2 close order en `history.py:stats()` corregido. |

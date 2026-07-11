@@ -8,7 +8,7 @@ import plotly.io as pio
 # Configurar tema global para que el texto sea negro (para modo claro)
 pio.templates.default = "plotly_white"
 
-API_URL = "http://localhost:8000"
+API_URL = "http://localhost:8003"
 
 st.set_page_config(
     page_title="Risk Control Dashboard",

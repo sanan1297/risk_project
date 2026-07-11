@@ -216,7 +216,9 @@ def stats() -> dict:
     fd_rows = conn2.execute(
         "SELECT factores_disminuyen FROM predicciones WHERE factores_disminuyen IS NOT NULL"
     ).fetchall()
-    conn2.close()
+    mc_row = conn2.execute(
+        "SELECT COUNT(*) as con_mc, COALESCE(SUM(mc_iteraciones), 0) as total_iter FROM predicciones WHERE mc_iteraciones IS NOT NULL"
+    ).fetchone()
 
     counter = Counter()
     for r in fa_rows:
@@ -233,9 +235,7 @@ def stats() -> dict:
             pass
     top_factores = [{"label": k, "apariciones": v} for k, v in counter.most_common(10)]
 
-    mc_row = conn2.execute(
-        "SELECT COUNT(*) as con_mc, COALESCE(SUM(mc_iteraciones), 0) as total_iter FROM predicciones WHERE mc_iteraciones IS NOT NULL"
-    ).fetchone()
+    conn2.close()
 
     return {
         "total_predicciones": row["total_predicciones"],

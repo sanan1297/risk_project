@@ -14,13 +14,13 @@ Validar que el pipeline completo (feature engineering → modelo serializado →
 
 ### Grupo A: Datos Vistos (5 contratos del dataset de 351)
 
-| ID Contrato | Sobrecosto Real | Perfil | Motivo |
-|---|---|---|---|
-| C-001 | 28.6% | Medio | Primer contrato del dataset. Referencia línea base |
-| C-010 | 37.3% | Alto | Contrato con muchas features TF-IDF relevantes |
-| C-017 | 53.1% | Muy Alto | Caso extremo (subestimado por regresión, bien clasificado) |
-| C-043 | 2.2% | Muy Bajo | Caso "problema" (sobreestimado por el modelo). Útil para mostrar limitaciones |
-| C-128 | 30.4% | Medio-Alto | Caso "típico" donde el modelo acierta en la alerta |
+| ID Contrato | Valor Inicial | Valor Final | Sobrecosto Real | Perfil | Motivo |
+|---|---|---|---|---|---|---|
+| C-001 | $16,147,899,764 | $20,760,111,074 | 28.6% | Medio | Primer contrato del dataset. Referencia línea base |
+| C-010 | $31,074,451,269 | $31,639,311,316 | 37.3% | Alto | Contrato con muchas features TF-IDF relevantes |
+| C-017 | $23,879,922,977 | $36,560,862,978 | 53.1% | Muy Alto | Caso extremo (subestimado por regresión, bien clasificado) |
+| C-043 | $13,586,470,318 | $13,885,569,717 | 2.2% | Muy Bajo | Caso "problema" (sobreestimado por el modelo). Útil para mostrar limitaciones |
+| C-128 | $5,217,123,300 | $6,802,102,583 | 30.4% | Medio-Alto | Caso "típico" donde el modelo acierta en la alerta |
 
 Archivos CSV de entrada: `tests/data/c-001.csv`, `tests/data/c-010.csv`, `tests/data/c-017.csv`, `tests/data/c-043.csv`, `tests/data/c-128.csv`
 

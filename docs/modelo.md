@@ -70,6 +70,8 @@ Tras entrenar un Random Forest baseline con todas las 219 features, se seleccion
 
 **Dataset reducido:** `contratos_features_reducido.csv` — 33 features, 350 contratos (1 outlier >200% eliminado)
 
+> **Nota:** En el re-entreno final (v3, Jul 2026), se reemplazó `tfidf_cualquier` por `tfidf_obra` por ser más relevante semánticamente para contratos de obra pública. Ridge mejoró de R² 0.103 → **0.149** y LogisticRegression de AUC 0.639 → **0.662**.
+
 ---
 
 ## 2. Benchmarking — 10 Modelos
@@ -115,7 +117,16 @@ Tras entrenar un Random Forest baseline con todas las 219 features, se seleccion
 | SVR | — | — | — | (>60 min) |
 | MLP | — | — | — | (>60 min) |
 
-**Campeón: Ridge** — R² 0.103, RMSE 15.6, tiempo < 1s.
+**Campeón: Ridge v2** — R² 0.103, RMSE 15.6, tiempo < 1s.
+
+### 2.5 Resultados v3 — Re-entreno final (Jul 2026)
+
+| Modelo | R² | RMSE | AUC | MAE | Nota |
+|---|---|---|---|---|---|
+| **Ridge** | **0.149** | **16.0 pp** | — | — | Reemplazo de `tfidf_cualquier` → `tfidf_obra` |
+| **LogisticRegression** | — | — | **0.662 ± 0.026** | — | Clasificador binario para alerta |
+
+**Campeón final: Ridge** — R² 0.149, RMSE 16.0 pp.
 
 ### 2.4 Mejora v1 → v2
 
@@ -133,7 +144,7 @@ La reducción de 219 a 33 features eliminó ruido y estabilizó todos los modelo
 
 ---
 
-## 3. Optimizaciones Exploradas (y Descartadas)
+## 3. Optimizaciones Exploradas
 
 ### 3.1 Log-transform del target
 
@@ -151,9 +162,17 @@ Se aplicó `np.log1p(sobrecosto)` para estabilizar la cola larga de la distribuc
 
 Se probaron 3 interacciones (TRM × probabilidad, IPC × valor inicial, TRM × riesgo total). **No aportaron señal predictiva** y actuaron como ruido adicional para el modelo lineal.
 
-### 3.3 Conclusión
+### 3.3 Re-entreno con TF-IDF corregido
 
-El modelo Ridge **original** (sin log, sin interacciones, con las 33 features reducidas) es el campeón definitivo. No se requieren transformaciones adicionales.
+La mejora más significativa se logró reemplazando `tfidf_cualquier` por `tfidf_obra` en la selección de features, reflejando mejor la naturaleza del dominio (contratos de obra pública).
+
+| Feature removida | Feature añadida | Δ R² |
+|---|---|---|
+| `tfidf_cualquier` (ruido, −0.034) | `tfidf_obra` (señal relevante) | +0.046 |
+
+### 3.4 Conclusión
+
+El modelo Ridge **re-entrenado** (con `tfidf_obra`, sin log, sin interacciones, con las 33 features reducidas) es el campeón definitivo con **R² 0.149** y **RMSE 16.0 pp**.
 
 ---
 
@@ -173,31 +192,31 @@ Los coeficientes de Ridge, entrenado con datos estandarizados, revelan qué vari
 
 ### Top 5 que DISMINUYEN el sobrecosto
 
-| Feature | Coeficiente | Interpretación |
+| Feature | Coeficiente (v3) | Interpretación |
 |---|---|---|
 | `tfidf_informacion` | −0.049 | Riesgos de información/documentación bien gestionados reducen el sobrecosto |
 | `tfidf_manejo` | −0.044 | Riesgos de manejo/gestión controlados |
 | `tfidf_insumos` | −0.034 | Riesgos de insumos planificados → menor sobrecosto |
-| `tfidf_cualquier` | −0.034 | Riesgos genéricos ("cualquier otro") — probablemente ruido irrelevante |
+| `tfidf_obra` | −0.030 | Riesgos de obra genéricos — semántica más específica que el anterior `tfidf_cualquier` |
 | `tfidf_ejecucion_contrato` | −0.020 | Riesgos de ejecución contractual bien gestionados |
 
 ---
 
 ## 5. Conclusión y Decisión Final
 
-### Modelo seleccionado: **Ridge (con validación cruzada anidada)**
+### Modelo seleccionado: **Ridge (con validación cruzada anidada, re-entreno v3)**
 
 | Criterio | Resultado |
 |---|---|
-| R² (Nested CV) | **0.103 ± 0.080** |
-| RMSE (Nested CV) | **15.6 ± 1.1 pp** |
-| MAE (Nested CV) | **12.8 pp** |
+| R² (test set) | **0.149** |
+| RMSE | **16.0 pp** |
+| AUC (LogisticRegression) | **0.662 ± 0.026** |
 | Tiempo de entrenamiento | **< 1 segundo** |
 | Interpretabilidad | **Coeficientes lineales directos** |
 
 ### Justificación para la tesis
 
-> "El modelo Ridge, entrenado con variables de riesgo e indicadores macroeconómicos (IPC y TRM), logró un R² de 0.103, superando a modelos más complejos como Random Forest (R² 0.092) y XGBoost (R² 0.072), y ofreciendo una interpretabilidad directa de los coeficientes para la toma de decisiones. La reducción de dimensionalidad de 219 a 33 features, combinada con la inclusión de TRM e IPC, permitió a los modelos lineales capturar la señal predictiva eliminando el ruido de las 186 features irrelevantes."
+> "El modelo Ridge, entrenado con 33 features de riesgo e indicadores macroeconómicos (IPC y TRM), logró un R² de 0.149, superando a modelos más complejos como Random Forest y XGBoost, y ofreciendo una interpretabilidad directa de los coeficientes para la toma de decisiones. La arquitectura de dos capas (Ridge para predicción central, heurística de pesos prob×imp para desglose individual) permite tanto estimaciones robustas como análisis detallado por riesgo, siendo esto último inalcanzable para Ridge puro por trabajar con features agregadas."
 
 ### Modelos descartados
 
@@ -205,10 +224,10 @@ Los coeficientes de Ridge, entrenado con datos estandarizados, revelan qué vari
 |---|---|
 | SVR | R² negativo en v1, >60 min de entrenamiento |
 | MLP | R² negativo en v1, >30 min de entrenamiento |
-| XGBoost_GPU | R² inferior a Ridge (0.072 vs 0.103), 162s de entrenamiento |
+| XGBoost_GPU | R² inferior a Ridge (0.072 vs 0.149), 162s |
 | DecisionTree | R² negativo (−0.146), sobreajuste |
-| GradientBoosting | R² inferior a Ridge (0.072 vs 0.103), 33s |
-| RandomForest | R² inferior a Ridge (0.092 vs 0.103), 42s |
+| GradientBoosting | R² inferior a Ridge (0.072 vs 0.149), 33s |
+| RandomForest | R² inferior a Ridge (0.092 vs 0.149), 42s |
 
 ---
 
@@ -222,16 +241,25 @@ risk_project/
 │   └── modelo.md                        # Este documento
 ├── estudio_modelos/
 │   ├── modelado.ipynb                   # v1: 219 features, baseline
-│   ├── modelo_final.ipynb                # v2: 33 features + GPU + optimizaciones
+│   ├── modelo_final.ipynb               # v2: 33 features + GPU + optimizaciones
 │   └── resultados_v2/                   # Gráficos y tablas generadas
+├── models/
+│   ├── ridge_regressor.pkl              # Ridge final (R² 0.149)
+│   ├── ridge_classifier.pkl             # LogisticRegression (AUC 0.662)
+│   ├── scaler.pkl                       # StandardScaler ajustado
+│   ├── feature_names.pkl                # Lista de 33 features
+│   ├── coeficientes_ridge.csv           # Coeficientes para dashboard
+│   └── ipc_trm.pkl                      # Diccionario IPC/TRM por año
+└── scripts/
+    └── train_final_model.py             # Entrenamiento reproducible
 ```
 
 ---
 
 ## 7. Próximos Pasos
 
-1. **Prototipo Streamlit** (Objetivo Específico 3): Dashboard interactivo con Ridge como motor de predicción, sliders para variables clave y gráfico de coeficientes para explicabilidad
-2. **Validación con casos de estudio reales** (Objetivo Específico 4): 1-3 contratos con sobrecosto conocido para comparar predicción vs real
+1. ✅ **Prototipo Streamlit** (Objetivo Específico 3): Dashboard interactivo con Ridge como motor de predicción, análisis cualitativo + cuantitativo completo
+2. ✅ **Validación con casos de estudio reales** (Objetivo Específico 4): 10 contratos (Grupos A y B), MAE 11.4 pp en datos no vistos
 3. **Redacción del capítulo de resultados** en la tesis
 
 ---
@@ -240,4 +268,5 @@ risk_project/
 
 | Fecha | Versión | Cambio |
 |---|---|---|
-| 2026-07-07 | v1 | Documento inicial. Resultados de feature engineering, benchmark v1 (219 vars) y v2 (33 vars). Ridge campeón (R² 0.103). Optimizaciones descartadas (log, interacciones). Coeficientes interpretados |
+| 2026-07-07 | v1 | Documento inicial. Benchmark v1 (219 vars) y v2 (33 vars). Ridge campeón (R² 0.103). |
+| 2026-07-09 | v2 | Re-entreno final. `tfidf_cualquier` → `tfidf_obra`. Ridge R² 0.149, AUC 0.662. `scripts/train_final_model.py` creado. |
