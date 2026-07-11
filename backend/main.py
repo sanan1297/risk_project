@@ -138,6 +138,7 @@ def predict_montecarlo(
     n_iteraciones: int = Form(1000),
     incluir_ruido: bool = Form(True),
     valor_inicial: float | None = Form(None),
+    history_id: int | None = Form(None),
 ):
     df = _parse_input(file, riesgos)
 
@@ -156,6 +157,13 @@ def predict_montecarlo(
         )
     except Exception as e:
         raise HTTPException(500, f"Error en simulación Monte Carlo: {e}")
+
+    if history_id is not None:
+        try:
+            history.actualizar_mc(history_id, n_iteraciones)
+            history.guardar_resultado_completo(history_id, result)
+        except Exception:
+            pass
 
     return result
 
@@ -194,6 +202,22 @@ def get_history(page: int = 1, page_size: int = 20):
             factores_disminuyen=_build_factor_info(fd),
         ))
     return {"data": out, "total": result["total"], "page": result["page"], "page_size": result["page_size"], "paginas": result["paginas"]}
+
+
+@app.get("/history/{pred_id}")
+def get_history_item(pred_id: int):
+    data = history.obtener_por_id(pred_id)
+    if data is None:
+        raise HTTPException(404, "Predicción no encontrada")
+    return data
+
+
+@app.get("/history/{pred_id}/resultados")
+def get_resultados_completos(pred_id: int):
+    data = history.obtener_resultado_completo(pred_id)
+    if data is None:
+        raise HTTPException(404, "No hay resultados cuantitativos para esta predicción")
+    return data
 
 
 @app.put("/history/{pred_id}")

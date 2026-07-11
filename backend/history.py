@@ -31,9 +31,18 @@ def init():
             sobrecosto_real REAL,
             notas TEXT,
             factores_aumentan TEXT,
-            factores_disminuyen TEXT
+            factores_disminuyen TEXT,
+            mc_iteraciones INTEGER
         )
     """)
+    try:
+        conn.execute("ALTER TABLE predicciones ADD COLUMN mc_iteraciones INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE predicciones ADD COLUMN resultado_json TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -51,14 +60,16 @@ def guardar(
     factores_disminuyen: list[dict],
     sobrecosto_real: float | None = None,
     notas: str | None = None,
+    mc_iteraciones: int | None = None,
 ) -> int:
     conn = _get_conn()
     cur = conn.execute(
         """INSERT INTO predicciones
         (created_at, id_contrato, n_riesgos, anio, ipc, trm,
          prediccion_ridge, probabilidad_alto_riesgo, alerta,
-         sobrecosto_real, notas, factores_aumentan, factores_disminuyen)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+         sobrecosto_real, notas, factores_aumentan, factores_disminuyen,
+         mc_iteraciones)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             datetime.now().isoformat(),
             id_contrato,
@@ -73,11 +84,43 @@ def guardar(
             notas,
             json.dumps(factores_aumentan, ensure_ascii=False),
             json.dumps(factores_disminuyen, ensure_ascii=False),
+            mc_iteraciones,
         ),
     )
     conn.commit()
     conn.close()
     return cur.lastrowid
+
+
+def actualizar_mc(pred_id: int, mc_iteraciones: int) -> None:
+    conn = _get_conn()
+    conn.execute(
+        "UPDATE predicciones SET mc_iteraciones = ? WHERE id = ?",
+        (mc_iteraciones, pred_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def guardar_resultado_completo(pred_id: int, resultado: dict) -> None:
+    conn = _get_conn()
+    conn.execute(
+        "UPDATE predicciones SET resultado_json = ? WHERE id = ?",
+        (json.dumps(resultado, ensure_ascii=False), pred_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def obtener_resultado_completo(pred_id: int) -> dict | None:
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT resultado_json FROM predicciones WHERE id = ?", (pred_id,)
+    ).fetchone()
+    conn.close()
+    if row and row["resultado_json"]:
+        return json.loads(row["resultado_json"])
+    return None
 
 
 def listar_paginado(page: int = 1, page_size: int = 20) -> dict:
@@ -89,8 +132,13 @@ def listar_paginado(page: int = 1, page_size: int = 20) -> dict:
         (page_size, offset),
     ).fetchall()
     conn.close()
+    data = []
+    for r in rows:
+        d = dict(r)
+        d.pop("resultado_json", None)
+        data.append(d)
     return {
-        "data": [dict(r) for r in rows],
+        "data": data,
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -185,6 +233,10 @@ def stats() -> dict:
             pass
     top_factores = [{"label": k, "apariciones": v} for k, v in counter.most_common(10)]
 
+    mc_row = conn2.execute(
+        "SELECT COUNT(*) as con_mc, COALESCE(SUM(mc_iteraciones), 0) as total_iter FROM predicciones WHERE mc_iteraciones IS NOT NULL"
+    ).fetchone()
+
     return {
         "total_predicciones": row["total_predicciones"],
         "contratos_unicos": row["contratos_unicos"],
@@ -196,7 +248,29 @@ def stats() -> dict:
         "top_factores": top_factores,
         "histograma_riesgos": [dict(r) for r in riesgos_dist],
         "predicciones_vs_reales": [dict(r) for r in reales],
+        "mc_predicciones": mc_row["con_mc"],
+        "mc_iteraciones_totales": mc_row["total_iter"],
     }
+
+
+def obtener_por_id(pred_id: int) -> dict | None:
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT * FROM predicciones WHERE id = ?", (pred_id,)
+    ).fetchone()
+    conn.close()
+    if row is None:
+        return None
+    d = dict(row)
+    resultado_raw = d.pop("resultado_json", None)
+    d["resultado_json"] = json.loads(resultado_raw) if resultado_raw else None
+    for col in ("factores_aumentan", "factores_disminuyen"):
+        if d.get(col):
+            try:
+                d[col] = json.loads(d[col])
+            except (json.JSONDecodeError, TypeError):
+                d[col] = []
+    return d
 
 
 def eliminar(pred_id: int) -> None:

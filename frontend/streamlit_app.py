@@ -390,6 +390,8 @@ def _render_tab_uso():
     rt = stats["riesgos_totales"]
     par = stats["porcentaje_alto_riesgo"]
     sp = stats["sobrecosto_promedio"]
+    mc_pred = stats.get("mc_predicciones", 0)
+    mc_iter = stats.get("mc_iteraciones_totales", 0)
 
     st.html(f"""
     <div class="kpi-row">
@@ -397,6 +399,10 @@ def _render_tab_uso():
       {kpi_card("Riesgos Procesados", str(rt), f"{rt//max(tp,1)} por pred.", ("#7B5CE4", "#b06ff2"), True)}
       {kpi_card("Alto Riesgo", f"{par*100:.0f}%", f"de {tp} predicciones", ("#EF4444", "#F97316"), par > 0.3)}
       {kpi_card("Sobrecosto Prom.", f"{sp:.1f}%", f"estimado promedio", ("#1ABC9C", "#2ECC71"), sp < 25)}
+    </div>
+    <div class="kpi-row" style="grid-template-columns: repeat(2, 1fr);">
+      {kpi_card("Análisis Cuantitativo", str(mc_pred), f"con Monte Carlo", ("#7B5CE4", "#b06ff2"), True)}
+      {kpi_card("Simulaciones MC", f"{mc_iter:,}".replace(",", "."), f"{mc_iter//max(mc_pred,1):,} por pred.".replace(",", "."), ("#4facfe", "#00f2fe"), True)}
     </div>
     """)
 
@@ -999,11 +1005,17 @@ def _render_predict():
                 _mostrar_resultados(resp, df_orig)
 
             if incluir_mc:
+                mc_history_id = None
+                if resp is not None and resp.status_code == 200:
+                    preds = resp.json()
+                    if isinstance(preds, list) and len(preds) > 0:
+                        mc_history_id = preds[0].get("history_id")
                 with st.spinner(f":material/sync: Ejecutando {mc_iter} simulaciones Monte Carlo..."):
                     mc_resp = _call_mc_api(
                         data_bytes=raw, text_data=texto_csv, filename=file_name,
                         n_iteraciones=mc_iter, incluir_ruido=mc_ruido,
                         valor_inicial=vi_val if vi_val > 0 else None,
+                        history_id=mc_history_id,
                     )
                 if mc_resp is not None and mc_resp.status_code == 200:
                     st.session_state.mc_data = mc_resp.json()
@@ -1110,6 +1122,44 @@ def _render_history():
                                                 st.rerun()
                                         except Exception:
                                             pass
+                        ver_key = f"ver_full_{hid}"
+                        if st.button(":material/analytics: Ver análisis completo", key=ver_key, use_container_width=True):
+                            try:
+                                rr = requests.get(f"{API_URL}/history/{hid}", timeout=10)
+                                if rr.status_code == 200:
+                                    st.session_state[f"full_{hid}"] = rr.json()
+                                    st.rerun()
+                            except Exception:
+                                pass
+                        if st.session_state.get(f"full_{hid}"):
+                            full = st.session_state[f"full_{hid}"]
+                            pred = full.get("prediccion_ridge", 0)
+                            prob = full.get("probabilidad_alto_riesgo", 0) * 100
+                            alerta = full.get("alerta", "")
+                            is_alto = "ALTO" in alerta
+                            badge_color = "#EF4444" if is_alto else "#1ABC9C"
+                            color = "red" if pred > 30 else ("orange" if pred > 15 else "green")
+                            st.markdown("---")
+                            st.markdown(f'<div style="color:#000;font-size:1rem;font-weight:600;">Análisis completo — {full.get("id_contrato","")}</div>', unsafe_allow_html=True)
+                            rc = st.columns([1, 1, 2])
+                            with rc[0]:
+                                st.markdown(f'<div style="font-size:2.5rem;font-weight:900;color:{color};">{pred:.1f}%</div><span style="color:#000;font-weight:600;">Sobrecosto estimado</span>', unsafe_allow_html=True)
+                            with rc[1]:
+                                st.markdown(f'<div style="font-size:2rem;font-weight:800;color:{badge_color};">{prob:.0f}%</div><span style="color:#000;font-weight:600;">Prob. alto riesgo</span>', unsafe_allow_html=True)
+                                st.markdown(f'<span style="display:inline-block;background:{badge_color}22;color:{badge_color};padding:2px 12px;border-radius:100px;font-weight:700;">{alerta}</span>', unsafe_allow_html=True)
+                            with rc[2]:
+                                fa = full.get("factores_aumentan", [])[:4]
+                                fd = full.get("factores_disminuyen", [])[:4]
+                                parts_html = '<div style="display:flex;gap:20px;">'
+                                if fa:
+                                    parts_html += '<div><div style="color:#000;font-weight:600;">▲ Suben</div>' + ''.join(f'<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;border-bottom:1px solid #e0e0e0;"><span style="color:#000;font-size:0.85rem;">{f["label"]}</span><span style="color:#DC2626;font-weight:700;">+{f["coef"]:.2f}</span></div>' for f in fa) + '</div>'
+                                if fd:
+                                    parts_html += '<div><div style="color:#000;font-weight:600;">▼ Bajan</div>' + ''.join(f'<div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0;border-bottom:1px solid #e0e0e0;"><span style="color:#000;font-size:0.85rem;">{f["label"]}</span><span style="color:#16A34A;font-weight:700;">{f["coef"]:.2f}</span></div>' for f in fd) + '</div>'
+                                parts_html += '</div>'
+                                st.markdown(parts_html, unsafe_allow_html=True)
+                            if full.get("resultado_json"):
+                                _mostrar_resultados_mc(full["resultado_json"])
+                            st.markdown("---")
                         if editando:
                             evcols = st.columns([1, 1.5, 2, 1])
                             with evcols[0]:
@@ -1169,7 +1219,7 @@ def _fmt_cop(val):
     return f"${val:,.0f}"
 
 
-def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ruido=True, valor_inicial=None):
+def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ruido=True, valor_inicial=None, history_id=None):
     files, form = None, {}
     if data_bytes is not None:
         files = {"file": (filename or "datos.csv", data_bytes, "text/csv")}
@@ -1185,6 +1235,8 @@ def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ru
     form["incluir_ruido"] = str(incluir_ruido).lower()
     if valor_inicial is not None:
         form["valor_inicial"] = str(valor_inicial)
+    if history_id is not None:
+        form["history_id"] = str(history_id)
     try:
         return requests.post(f"{API_URL}/predict/montecarlo", files=files, data=form, timeout=60)
     except requests.ConnectionError:
