@@ -725,27 +725,20 @@ El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El mo
 
 ## 12. Historial de Cambios
 
-| Fecha | Versión | Cambio |
-|---|---|---|---|
-| — | v17 | Actualización docs con Grupo B completo (C-361, C-362, C-363) + nuevas predicciones post re-entreno |
-|---|---|---|
-| 2026-06-23 | v1 | Documento inicial. Definición de proyecto de desarrollo, Leyes 1-5. Script `proyectos_inversion.py`. Resultado: 525 proyectos Obra |
-| 2026-06-25 | v2 | Incorporación de SECOP I (histórico). Unificación SECOP I + II. Filtro de terminados + URL. Variable sobrecosto. Scripts `unificar_secop.py` + `depurar.py`. Resultado: **8,946 proyectos** |
-| 2026-06-25 | v3 | Eliminación de sobrecosto negativo (solo se buscan sobrecostos). Separación por fuentes SECOP I y II. Resultado: **8,038 proyectos** (5,500 SECOP I + 2,538 SECOP II) |
-| 2026-06-25 | v4 | Script `excel_lite.py`. Versiones reducidas `proyectos_secop1_lite.csv` y `proyectos_secop2_lite.csv` con columnas esenciales (entidad, url al inicio) para validación manual de URLs y matrices de riesgo |
-| 2026-06-26 | v5 | Deduplicación SECOP I por URL en `separar_fuentes.py` (777 duplicados eliminados). `excel_lite.py` filtrado a solo `sobrecosto_pct > 0` para SECOP I lite (1,560 registros) |
-| 2026-06-26 | v6 | Enriquecimiento de `matriz.csv` (Tesis/Matrices/) con `url` y `objeto` desde SECOP I lite mediante join por `valor_final`. 1,522/1,526 filas con match. Nueva sección 5 en proceso.md |
-| 2026-06-26 | v7 | Investigación SECOP II: se verificó que el API de datos.gov.co no expone columnas de adiciones/sobrecosto. Se intentó scraping (ReCaptcha), búsqueda de datasets alternativos y cruce con otras fuentes. Solo **5 registros** con sobrecosto real. Decisión: **el dataset base es SECOP I** (4,723 registros, 1,560 con sobrecosto > 0). SECOP II se incluye como complemento menor (5 registros). Documentado en sección 4.4 |
-| 2026-07-06 | v8 | Limpieza del repositorio: eliminados 9 archivos muertos (scripts v1, CSVs/xlsx regenerables, duplicados). Creado `.gitignore`. Los 5 contratos SECOP II se mapearon desde `docs/matriz.csv` — 5 noticeUIDs con URL `community.secop.gov.co` encontrados en `matriz.csv` y ubicados en `secop2_cache.csv` por `urlproceso`. Sección 4.4 actualizada con la tabla corregida. Archivo `secop2_con_sobrecosto.csv` reconstruido con 5 contratos + 1 excluido por sobrecosto negativo |
-| 2026-07-06 | v9 | Auditoría y corrección de `docs/matriz.csv`: 129 filas (9 contratos) tenían 18-21 campos por mal quoting CSV. Se creó `docs/matriz_clean.csv` con padding/truncado a 20 columnas, preservando 344 contratos. Notebook `matriz_inicial.ipynb` actualizado para usar la versión clean. Sección 5 y 7 actualizadas |
-| 2026-07-06 | v10 | Normalización exhaustiva del dataset: `estudio_data/normalizar.py` con 72,123 normalizaciones en 9 campos categóricos. clase (82→22), asignacion (279→10), tipo (265→17), etapa (109→23), fuente_riesgo (47→4), probabilidad (38→6), impacto (40→6), categoria (43→5), valoracion (47 vars). Dataset final: 351 contratos, 6,525 filas, 0 tildes, 0 categóricas residuales. Documento y conclusiones del notebook actualizados |
-| 2026-07-07 | v11 | Feature engineering completo: `contratos_features.csv` (219 features, 351 contratos). Feature reduction: top 30 por RF importance + anio/ipc/trm → `contratos_features_reducido.csv`. Benchmarking v2 con 33 features: Ridge campeón (R² 0.103, RMSE 15.6, <1s). GPU XGBoost probado con `device='cuda'`. Optimizaciones (log-target, interacciones, limpieza de coefs) descartadas por empeorar R². Documento `docs/modelo.md` creado con resultados completos |
-| 2026-07-07 | v12 | **Prototipo funcional implementado.** Backend FastAPI con 7 endpoints. Frontend Streamlit con 3 vistas (Dashboard/Predicción/Historial). Feature engineering pipeline con preservación de `id_contrato`. Dashboard con 2 tabs (Uso + Entrenamiento) con KPI cards, gráficos Plotly, y datos reales. Predictor unificado (CSV/texto) con formulario de validación inline. Historial paginado (20 regs/pág) con navegación y spinners de carga. Arquitectura completa documentada con diagramas Mermaid. Código muerto limpiado. |
-| 2026-07-07 | v13 | **Pruebas de validación completadas.** 10 contratos (Grupo A sanidad + Grupo B generalización). MAE Grupo B: 11.3 pp. Validación contra notebook documenta diferencia de feature set (33 vs ~150 vars). Parámetros IPC/TRM bloqueados fuera de vista de predicción. Formulario de validación agregado al historial. BD poblada con valores reales. Plan de pruebas en `tests/plan_de_pruebas.md`. Sección 12 agregada a este documento. |
-| 2026-07-08 | v14 | **Corrección de métricas de entrenamiento.** El dashboard mostraba "1,560 contratos" (pool SECOP I total) cuando el modelo se entrenó realmente con 350. `training_stats.py` cambiado de `proyectos_secop1_lite.csv` a `matriz_clean.csv` agrupado por contrato. Añadidos campos `contratos_pool_secop1` y `contratos_secop2_incluidos`. Frontend actualizado para mostrar "Entrenamiento: 350 de 1,560 del pool". |
-| 2026-07-09 | v15 | **Re-entreno con R² 0.149.** Se eliminó `tfidf_cualquier`, se añadió `tfidf_obra`. Ridge mejoró de 0.103 a 0.149. LogisticRegression mejoró AUC de 0.639 a 0.662. Se creó `scripts/train_final_model.py` reproducible. Artefactos actualizados. |
-| 2026-07-09 | v16 | **Análisis cuantitativo implementado.** Módulo `quantitative_analysis.py` con Monte Carlo (1000 iter, Δ prob/imp discreto ±1, ruido Gaussiano σ=RMSE_var), tornado por tipo (swing real del modelo SVR), desglose individual (peso=prob×imp/Σ). Endpoint `POST /predict/montecarlo` + schemas `MonteCarloSalida`. |
-| 2026-07-10 | v17 | **Historial con "Ver análisis completo".** Endpoints `GET /history/{id}` y `GET /history/{id}/resultados`. Botón inline en frontend que expande el MC sin modal. Keys de Streamlit con sufijo `{uid}` para evitar duplicados. Guardado de `resultado_json` en history.db. |
-| 2026-07-10 | v18 | **Arreglos finales.** Paginación reducida a 15. `training_stats.py`: `total_contratos` cambiado a 351 (n_contratos_raw). API_URL workaround a puerto 8003. Bug de conn2 close order en `history.py:stats()` corregido. |
-| 2026-07-11 | v19 | **Migración a rango de fechas.** Se reemplazaron anio/ipc/trm (año único) por anio_inicio/anio_fin/duracion/ipc_acumulado/trm_promedio. Ridge no logró capturar no-linealidades del rango (R² CV=0.066). **SVR RBF** seleccionado como nuevo campeón (R² CV=0.072, AUC=0.673). `scripts/compute_ipc_range.py` creado. Permutation importance como método de interpretabilidad (SHAP no disponible por incompatibilidad numba+numpy). |
-| 2026-07-11 | v20 | **RMSE variable por complejidad.** MC ahora usa RMSE según n_riesgos: 12 pp (1-10), 16 pp (11-20), 20 pp (21-30), 24 pp (>30). Validación con 10 contratos: MAE=10.5 pp, 7/10 aciertos. Todos los documentos actualizados. |
+| Fecha | Cambio |
+|---|---|
+| 2026-06-23 | Definición de proyecto. Script `proyectos_inversion.py`: 525 proyectos Obra |
+| 2026-06-25 | Unificación SECOP I + II. Filtro de terminados + URL. Variable sobrecosto. **8,946 proyectos** |
+| 2026-06-25 | Eliminación de sobrecosto negativo. Separación por fuentes. **8,038 proyectos** (5,500 SECOP I + 2,538 SECOP II) |
+| 2026-06-26 | Deduplicación SECOP I por URL (777 duplicados). Filtro a solo sobrecosto > 0 (1,560 registros) |
+| 2026-06-26 | Enriquecimiento de `matriz.csv` con `url` y `objeto` desde SECOP I lite via join por `valor_final`. 1,522/1,526 filas con match |
+| 2026-06-26 | Investigación SECOP II: API datos.gov.co no expone sobrecosto. Scraping bloqueado (ReCaptcha). Solo **5 registros** utilizables. Decisión: dataset base = SECOP I |
+| 2026-07-06 | Auditoría `matriz.csv`: 129 filas con mal quoting reparadas. `matriz_clean.csv` creado |
+| 2026-07-06 | Normalización: 72,123 normalizaciones en 9 campos. 351 contratos, 6,525 filas, 0 valores residuales |
+| 2026-07-07 | Feature engineering: 219 features → reducción a 33 vía RF importance. Ridge campeón R² 0.103. XGBoost GPU probado. Optimizaciones descartadas |
+| 2026-07-07 | Validación: 10 contratos (Grupo A sanidad + B generalización). MAE Grupo B: 11.3 pp |
+| 2026-07-08 | Corrección: training_stats usaba pool SECOP I (1,560) en vez de contratos reales de entrenamiento (350) |
+| 2026-07-09 | Re-entreno: se añadió `tfidf_obra`, eliminó `tfidf_cualquier`. Ridge R² 0.103→0.149, AUC 0.639→0.662 |
+| 2026-07-09 | Análisis cuantitativo: Monte Carlo (1000 iter, ruido σ=RMSE_var), tornado por tipo, desglose individual |
+| 2026-07-11 | Migración a rango de fechas (anio_inicio/anio_fin/ipc_acumulado/trm_promedio). Ridge no capturó no-linealidades (R² CV=0.066). **SVR RBF nuevo campeón** (R² CV=0.072, AUC=0.673). Permutation importance como interpretabilidad (SHAP incompatible con numba+numpy) |
+| 2026-07-11 | RMSE variable por n_riesgos (12/16/20/24 pp). Validación: MAE=10.5 pp, 7/10 aciertos |
