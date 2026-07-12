@@ -676,7 +676,7 @@ Metodología: cada contrato se cargó manualmente vía "Pegar texto" en el front
 Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `contratos_prueba.csv`.
 
 | Contrato | Inicio | Fin | Valor Inicial | Valor Final | Sobrecosto Real | Perfil |
-|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|
 | C-001 | 2018 | 2019 | \$16,148M | \$20,760M | 28.6% | Medio |
 | C-010 | 2018 | 2020 | \$31,074M | \$31,639M | 37.3% | Alto |
 | C-017 | 2019 | 2022 | \$23,880M | \$36,561M | 53.1% | Muy Alto |
@@ -693,7 +693,7 @@ Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `
 Modelo SVR con 35 features (30 TF-IDF + 5 rango: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio). R² full: 0.417, AUC: 0.673.
 
 | Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P90-P10 |
-|---|---|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|---|---|
 | C-001 | 2018 | 2019 | 28.6% | 25.01% | −3.6 pp | 81.7% | ALTO RIESGO | 12 | 16 pp | 41.9 pp |
 | C-010 | 2018 | 2020 | 37.3% | 16.84% | −20.5 pp | 41.0% | RIESGO MODERADO | 20 | 16 pp | 40.7 pp |
 | C-017 | 2019 | 2022 | 53.1% | 33.16% | −19.9 pp | 91.7% | ALTO RIESGO | 18 | 16 pp | 40.9 pp |
