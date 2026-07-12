@@ -1139,7 +1139,7 @@ def _render_history():
                                     unsafe_allow_html=True,
                                 )
                         with hcols[1]:
-                            st.markdown(f'<div class="history-metric"><div class="label" style="color:{MUTED};">Ridge</div><div class="value" style="color:{TEXT_COLOR};">{rid:.1f}%</div></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="history-metric"><div class="label" style="color:{MUTED};">SVR</div><div class="value" style="color:{TEXT_COLOR};">{rid:.1f}%</div></div>', unsafe_allow_html=True)
                         with hcols[2]:
                             st.markdown(f'<div class="history-metric"><div class="label" style="color:{MUTED};">Prob.</div><div class="value" style="color:{TEXT_COLOR};">{prob_val:.0f}%</div></div>', unsafe_allow_html=True)
                         with hcols[3]:
@@ -1486,52 +1486,34 @@ def _mostrar_resultados_mc(data: dict, uid: str = ""):
             st.html(f'<div class="chart-card"><div class="chart-title">Contribución por Riesgo al Sobrecosto Total</div>'
                     f'<div class="chart-subtitle">Distribución del sobrecosto estimado según peso relativo (prob × imp) de cada riesgo</div>')
             df_r = pd.DataFrame(rdata)
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                y=df_r["riesgo"].tolist(),
-                x=df_r["contribucion_porcentaje"].tolist(),
-                orientation="h",
-                marker_color=VERDE,
-                text=[_fmt_cop(c) if tiene_cop else f"{c:.2f}pp" for c in df_r["contribucion_porcentaje"]],
-                textposition="outside",
-                textfont=dict(color="#000000", size=10),
-            ))
-            fig.update_layout(height=max(250, len(rdata) * 30), margin=dict(l=10, r=10, t=10, b=20),
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#000000", size=11),
-                xaxis=dict(title=dict(text="COP" if tiene_cop else "pp", font=dict(color="#000000")), gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000")),
-                yaxis=dict(gridcolor=BORDER_COLOR, linecolor=BORDER_COLOR, tickfont=dict(color="#000000", size=11)),
-                hovermode="y unified")
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"mc_desglose_{uid}")
+            _max_c = df_r["contribucion_porcentaje"].max()
+            rows_html = ""
+            for idx, r2 in df_r.iterrows():
+                riesgo = str(r2["riesgo"]).replace("<", "&lt;").replace(">", "&gt;")
+                val = _fmt_cop(r2["contribucion_porcentaje"]) if tiene_cop else f"{r2['contribucion_porcentaje']:.2f}pp"
+                bar_pct = (r2["contribucion_porcentaje"] / _max_c * 100) if _max_c > 0 else 0
+                rows_html += "<tr>"
+                rows_html += f'<td style="word-break:break-word;white-space:normal;max-width:260px;padding:8px 10px;border-bottom:1px solid {BORDER_COLOR};font-size:0.8rem;color:#1E293B;line-height:1.4;">{riesgo}</td>'
+                rows_html += f'<td style="padding:8px 10px;border-bottom:1px solid {BORDER_COLOR};font-size:0.8rem;color:#475569;white-space:nowrap;">{r2["tipo"]}</td>'
+                rows_html += f'<td style="padding:8px 10px;border-bottom:1px solid {BORDER_COLOR};font-size:0.8rem;text-align:center;color:#1E293B;">{r2["probabilidad"]}</td>'
+                rows_html += f'<td style="padding:8px 10px;border-bottom:1px solid {BORDER_COLOR};font-size:0.8rem;text-align:center;color:#1E293B;">{r2["impacto"]}</td>'
+                rows_html += f'<td style="padding:8px 10px;border-bottom:1px solid {BORDER_COLOR};font-size:0.8rem;text-align:center;color:#1E293B;">{r2["peso_contribucion"]}</td>'
+                rows_html += f'<td style="padding:8px 10px;border-bottom:1px solid {BORDER_COLOR};font-size:0.8rem;font-weight:600;text-align:right;white-space:nowrap;color:#1E293B;">{val}</td>'
+                rows_html += f'<td style="padding:8px 10px;border-bottom:1px solid {BORDER_COLOR};width:120px;"><div style="height:18px;background:#E2E8F0;border-radius:4px;overflow:hidden;"><div style="height:100%;width:{bar_pct:.1f}%;background:{VERDE};border-radius:4px;min-width:4px;"></div></div></td>'
+                rows_html += "</tr>"
+            st.html(f"""<div style="overflow-x:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;">
+            <thead><tr style="background:#F1F5F9;">
+            <th style="padding:10px;text-align:left;font-size:0.7rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Riesgo</th>
+            <th style="padding:10px;text-align:left;font-size:0.7rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Tipo</th>
+            <th style="padding:10px;text-align:center;font-size:0.7rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Prob</th>
+            <th style="padding:10px;text-align:center;font-size:0.7rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Imp</th>
+            <th style="padding:10px;text-align:center;font-size:0.7rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Peso</th>
+            <th style="padding:10px;text-align:right;font-size:0.7rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">{"COP" if tiene_cop else "pp"}</th>
+            <th style="padding:10px;text-align:left;font-size:0.7rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Barra</th>
+            </tr></thead><tbody>{rows_html}</tbody></table></div>""")
             st.html("</div>")
 
-            with st.expander("Ver tabla detallada"):
-                df_display = df_r[["riesgo", "tipo", "categoria", "probabilidad", "impacto", "peso_contribucion", "contribucion_porcentaje"]].copy()
-                if tiene_cop:
-                    df_display["contribucion_porcentaje"] = df_display["contribucion_porcentaje"].apply(_fmt_cop)
-                rows_html = ""
-                for _, r2 in df_display.iterrows():
-                    riesgo = str(r2["riesgo"]).replace("<", "&lt;").replace(">", "&gt;")
-                    rows_html += "<tr>"
-                    rows_html += f'<td style="word-break:break-word;white-space:normal;max-width:250px;padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;color:#1E293B;">{riesgo}</td>'
-                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;color:#475569;">{r2["tipo"]}</td>'
-                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;color:#475569;">{r2["categoria"]}</td>'
-                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;text-align:center;">{r2["probabilidad"]}</td>'
-                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;text-align:center;">{r2["impacto"]}</td>'
-                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;text-align:center;">{r2["peso_contribucion"]}</td>'
-                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;font-weight:600;text-align:right;white-space:nowrap;">{r2["contribucion_porcentaje"]}</td>'
-                    rows_html += "</tr>"
-                st.markdown(f"""<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">
-                <thead><tr style="background:#F1F5F9;">
-                <th style="padding:8px;text-align:left;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Riesgo</th>
-                <th style="padding:8px;text-align:left;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Tipo</th>
-                <th style="padding:8px;text-align:left;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Categoría</th>
-                <th style="padding:8px;text-align:center;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Prob</th>
-                <th style="padding:8px;text-align:center;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Imp</th>
-                <th style="padding:8px;text-align:center;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Peso</th>
-                <th style="padding:8px;text-align:right;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Contrib.</th>
-                </tr></thead>
-                <tbody>{rows_html}</tbody></table></div>""", unsafe_allow_html=True)
+
 
 
 # ─── RENDER ────────────────────────────────────────────
