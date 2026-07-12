@@ -658,30 +658,9 @@ risk_project/
     └── data/                     # CSVs de prueba por contrato
 ```
 
----
+## 11. Pruebas de Validación
 
-## 11. Pendiente / Próximos Pasos
-
-1. ~~Feature engineering: agregar ~6,525 riesgos en 351 filas por contrato~~ ✅ `contratos_features.csv`
-2. ~~Feature reduction: top 30 por RF importance + control variables~~ ✅ `contratos_features_reducido.csv`
-3. ~~Benchmarking v1 (219 vars): Ridge campeón R² 0.074, todos evaluados~~ ✅ `modelado.ipynb`
-4. ~~Benchmarking v2 (33 vars): Ridge campeón R² 0.103, GPU XGBoost probado~~ ✅ `modelo_final.ipynb`
-5. ~~Optimizaciones: log-target + interacciones descartadas (empeoran R²)~~ ✅ `modelo_final.ipynb` sección 11
-6. ~~Interpretación de coeficientes Ridge: top features identificadas~~ ✅ `modelo.md`
-7. ~~**Prototipo**: Streamlit dashboard para predicción interactiva de sobrecosto~~ ✅ Hecho
-8. ~~**Validación**: 5 contratos Grupo A (sanidad) + 5 contratos Grupo B (generalización)~~ ✅ `tests/plan_de_pruebas.md`
-9. ~~**Análisis cuantitativo**: Monte Carlo + Tornado + Desglose por riesgo~~ ✅ `quantitative_analysis.py`
-10. ~~**"Ver completo" en Historial**: expandir inline MC + cualitativo desde historial~~ ✅ `streamlit_app.py`
-11. ~~**Paginación**: reducir de 20 a 15 registros por página~~ ✅ Hecho
-12. ~~**Arreglo bug training_stats**: `total_contratos` cambió a 351 (n_contratos_raw)~~ ✅ `training_stats.py`
-13. ~~**Migración a rango de fechas**: año único → anio_inicio/anio_fin/ipc_acumulado/trm_promedio~~ ✅ `compute_ipc_range.py`
-14. ~~**Cambio de modelo**: Ridge descartado (R² CV=0.066 con rango), SVR nuevo campeón (R² CV=0.072)~~ ✅ `svr_regressor.pkl`
-15. ~~**RMSE variable**: incertidumbre ahora varía según n_riesgos del contrato~~ ✅ `quantitative_analysis.py`
-16. **Pendientes**: liberar puerto 8000 (zombie PID 12248), interpretabilidad local, calibración umbrales RMSE
-
-## 12. Pruebas de Validación
-
-### 12.1 Diseño de Pruebas
+### 11.1 Diseño de Pruebas
 
 Se diseñaron dos grupos de prueba para evaluar el modelo SVR de 35 features:
 
@@ -692,24 +671,24 @@ Se diseñaron dos grupos de prueba para evaluar el modelo SVR de 35 features:
 
 Metodología: cada contrato se cargó manualmente vía "Pegar texto" en el frontend, con los parámetros IPC/TRM correspondientes a su rango de fechas.
 
-### 12.2 Datos de Prueba
+### 11.2 Datos de Prueba
 
 Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `contratos_prueba.csv`.
 
 | Contrato | Inicio | Fin | Valor Inicial | Valor Final | Sobrecosto Real | Perfil |
 |---|---|---|---|---|---|---|---|
-| C-001 | 2018 | 2019 | $16,148M | $20,760M | 28.6% | Medio |
-| C-010 | 2018 | 2020 | $31,074M | $31,639M | 37.3% | Alto |
-| C-017 | 2019 | 2022 | $23,880M | $36,561M | 53.1% | Muy Alto |
-| C-043 | 2021 | 2022 | $13,586M | $13,886M | 2.2% | Muy Bajo |
-| C-128 | 2019 | 2021 | $5,217M | $6,802M | 30.4% | Medio-Alto |
-| C-360 | 2019 | 2019 | $1,889M | $2,080M | 10.14% | — |
-| C-361 | 2022 | 2022 | $1,886M | $2,246M | 19.09% | — |
-| C-362 | 2021 | 2021 | $1,878M | $1,960M | 4.38% | — |
-| C-363 | 2022 | 2022 | $1,869M | $2,004M | 7.20% | — |
-| C-364 | 2023 | 2023 | $1,869M | $2,258M | 20.83% | — |
+| C-001 | 2018 | 2019 | \$16,148M | \$20,760M | 28.6% | Medio |
+| C-010 | 2018 | 2020 | \$31,074M | \$31,639M | 37.3% | Alto |
+| C-017 | 2019 | 2022 | \$23,880M | \$36,561M | 53.1% | Muy Alto |
+| C-043 | 2021 | 2022 | \$13,586M | \$13,886M | 2.2% | Muy Bajo |
+| C-128 | 2019 | 2021 | \$5,217M | \$6,802M | 30.4% | Medio-Alto |
+| C-360 | 2019 | 2019 | \$1,889M | \$2,080M | 10.14% | — |
+| C-361 | 2022 | 2022 | \$1,886M | \$2,246M | 19.09% | — |
+| C-362 | 2021 | 2021 | \$1,878M | \$1,960M | 4.38% | — |
+| C-363 | 2022 | 2022 | \$1,869M | \$2,004M | 7.20% | — |
+| C-364 | 2023 | 2023 | \$1,869M | \$2,258M | 20.83% | — |
 
-### 12.3 Resultados Grupo A — Prueba de Sanidad
+### 11.3 Resultados Grupo A — Prueba de Sanidad
 
 Modelo SVR con 35 features (30 TF-IDF + 5 rango: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio). R² full: 0.417, AUC: 0.673.
 
@@ -724,11 +703,11 @@ Modelo SVR con 35 features (30 TF-IDF + 5 rango: anio_inicio, anio_fin, duracion
 **MAE:** 14.9 pp | **Aciertos:** 3/5  
 **Conclusión:** Tendencia a regresión a la media (C-010 subestimado, C-043 sobreestimado). La incertidumbre ahora varía según complejidad: C-043 (22 riesgos) tiene P90-P10 de 51.7 pp vs 41 pp de contratos más simples.
 
-### 12.4 Validación contra Notebook (histórico)
+### 11.4 Validación contra Notebook (histórico)
 
-El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El modelo API actual es SVR con 35 features (rango de fechas). Las predicciones difieren por el cambio de modelo y feature set. Los resultados detallados del SVR se documentan en las secciones 12.3 y 12.5.
+El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El modelo API actual es SVR con 35 features (rango de fechas). Las predicciones difieren por el cambio de modelo y feature set. Los resultados detallados del SVR se documentan en las secciones 11.3 y 11.5.
 
-### 12.5 Resultados Grupo B — Prueba de Generalización
+### 11.5 Resultados Grupo B — Prueba de Generalización
 
 | Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P90-P10 |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -744,7 +723,7 @@ El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El mo
 
 ---
 
-## 13. Historial de Cambios
+## 12. Historial de Cambios
 
 | Fecha | Versión | Cambio |
 |---|---|---|---|
