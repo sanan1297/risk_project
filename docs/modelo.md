@@ -254,48 +254,7 @@ SHAP requiere numba, incompatible con numpy >=2.5 (Python 3.14). Se usó permuta
 
 ---
 
-## 6. Archivos del Proyecto
-
-```
-risk_project/
-├── docs/
-│   ├── contratos_macro.csv              # Features de rango por contrato (anio_inicio, ipc_acumulado, trm_promedio)
-│   └── modelo.md                        # Este documento
-├── notebooks/
-│   └── evaluacion_modelos.py            # Benchmark Ridge vs ElasticNet vs RF vs SVR
-│   └── test_svr_shap.py                 # Evaluación SVR + permutation importance
-├── models/
-│   ├── svr_regressor.pkl                # SVR campeón (R² 0.417 full)
-│   ├── classifier.pkl                   # LogisticRegression (AUC 0.673)
-│   ├── ridge_reference.pkl              # Ridge de referencia (coeficientes)
-│   ├── permutation_importance.csv       # Importancia global (10 reps)
-│   ├── scaler.pkl                       # StandardScaler ajustado
-│   ├── feature_names.pkl                # Lista de 35 features
-│   ├── tfidf_vectorizer.pkl             # Vectorizador TF-IDF
-│   └── ipc_trm.pkl                      # Diccionario IPC/TRM por año
-├── scripts/
-│   ├── train_final_model.py             # Entrenamiento SVR campeón
-│   └── compute_ipc_range.py             # Cálculo de IPC acumulado + TRM promedio por rango
-└── backend/
-    ├── predictor.py                     # Carga SVR + permutation importance
-    ├── quantitative_analysis.py         # MC con RMSE variable por n_riesgos
-    └── ...
-```
-
----
-
-## 7. Próximos Pasos / Trabajo Futuro
-
-1. ✅ **Prototipo funcional** con SVR como motor de predicción
-2. ✅ **Validación con 10 casos reales** (MAE = 10.5 pp, 7/10 aciertos)
-3. ✅ **RMSE variable por complejidad** (P90-P10 de 41 a 62 pp según n_riesgos)
-4. ⬜ **Interpretabilidad local**: LIME o SHAP (cuando numba sea compatible con Python 3.14)
-5. ⬜ **Calibración de umbrales RMSE** con datos históricos
-6. ⬜ **Redacción del capítulo de resultados** en la tesis
-
----
-
-## 8. Historial de Cambios
+## 6 Historial de Cambios
 
 | Fecha | Versión | Cambio |
 |---|---|---|
