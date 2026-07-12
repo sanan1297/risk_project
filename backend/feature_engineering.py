@@ -1,6 +1,7 @@
 from pathlib import Path
 from functools import lru_cache
 
+import numpy as np
 import joblib
 import pandas as pd
 
@@ -10,6 +11,8 @@ MODELS_DIR = ROOT / "models"
 CAT_COLS = ["tipo", "clase", "asignacion", "fuente_riesgo", "etapa", "categoria"]
 NUM_COLS = ["probabilidad", "impacto", "valoracion"]
 REQUIRED_COLS = ["id_contrato", "descripcion_riesgo", "probabilidad", "impacto", "tipo", "categoria"]
+
+MAX_DURACION = 5
 
 
 @lru_cache(maxsize=1)
@@ -40,36 +43,47 @@ def validate_input(df: pd.DataFrame) -> list[str]:
     return []
 
 
-def _lookup_ipc_trm(anio: int | float) -> tuple[float | None, float | None]:
-    data = _load_ipc_trm().get(int(anio))
-    if data is None:
-        return None, None
-    return (data["ipc"], data["trm"]) if isinstance(data, dict) else (data[0], data[1])
+def compute_range_features(anio_inicio: int, anio_fin: int) -> dict:
+    if anio_fin < anio_inicio:
+        anio_fin = anio_inicio
+    duracion = anio_fin - anio_inicio
+    if duracion > MAX_DURACION:
+        anio_fin = anio_inicio + MAX_DURACION
+        duracion = MAX_DURACION
+    ipc_trm_data = _load_ipc_trm()
+    ipc_acum = 1.0
+    trm_vals = []
+    for y in range(anio_inicio, anio_fin + 1):
+        d = ipc_trm_data.get(y, {"ipc": 3.0, "trm": 4000})
+        ipc_acum *= (1 + d["ipc"] / 100)
+        trm_vals.append(d["trm"])
+    ipc_acum = (ipc_acum - 1) * 100
+    trm_prom = float(np.mean(trm_vals))
+    return {
+        "anio_inicio": anio_inicio,
+        "anio_fin": anio_fin,
+        "duracion": duracion,
+        "ipc_acumulado": round(ipc_acum, 2),
+        "trm_promedio": round(trm_prom, 2),
+    }
 
 
-def resolve_ipc_trm(
-    anio_override: int | None,
+def resolve_macro_range(
+    anio_inicio: int | None,
+    anio_fin: int | None,
     ipc_override: float | None,
     trm_override: float | None,
-    df: pd.DataFrame,
-) -> tuple[pd.Series, pd.Series, pd.Series]:
-    anios = df["anio"] if "anio" in df.columns else pd.Series([anio_override or 2022] * len(df))
-
-    if ipc_override is not None and trm_override is not None:
-        ipc = pd.Series([ipc_override] * len(df))
-        trm = pd.Series([trm_override] * len(df))
-    elif anio_override is not None and anio_override in _load_ipc_trm():
-        ipc_v, trm_v = _lookup_ipc_trm(anio_override)
-        ipc = pd.Series([ipc_v] * len(df))
-        trm = pd.Series([trm_v] * len(df))
-    else:
-        pairs = anios.map(_lookup_ipc_trm)
-        ipc = pairs.map(lambda x: x[0])
-        trm = pairs.map(lambda x: x[1])
-        bad = anios[ipc.isna()].unique()
-        if len(bad):
-            raise ValueError(f"Año(s) fuera de rango: {list(bad)}. IPC/TRM desconocidos.")
-    return anios, ipc, trm
+) -> dict:
+    if anio_inicio is None:
+        anio_inicio = 2022
+    if anio_fin is None:
+        anio_fin = anio_inicio
+    feat = compute_range_features(anio_inicio, anio_fin)
+    if ipc_override is not None:
+        feat["ipc_acumulado"] = ipc_override
+    if trm_override is not None:
+        feat["trm_promedio"] = trm_override
+    return feat
 
 
 def _aggregate_basic_stats(df: pd.DataFrame) -> pd.DataFrame:
@@ -120,9 +134,10 @@ def _aggregate_tfidf(df: pd.DataFrame) -> pd.DataFrame:
 
 def aggregate_risks(
     df: pd.DataFrame,
-    anio: int | None = None,
-    ipc: float | None = None,
-    trm: float | None = None,
+    anio_inicio: int | None = None,
+    anio_fin: int | None = None,
+    ipc_override: float | None = None,
+    trm_override: float | None = None,
 ) -> pd.DataFrame:
     df = df.copy()
 
@@ -133,7 +148,7 @@ def aggregate_risks(
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().replace("nan", "no especificado")
 
-    FEATURES_33 = _load_features()
+    FEATURES_35 = _load_features()
 
     out = _aggregate_basic_stats(df)
 
@@ -143,19 +158,21 @@ def aggregate_risks(
     tfidf_df = _aggregate_tfidf(df)
     out = out.merge(tfidf_df, on="id_contrato", how="left")
 
-    anios, ipc_s, trm_s = resolve_ipc_trm(anio, ipc, trm, df)
-    out["anio"] = anios
-    out["ipc"] = ipc_s
-    out["trm"] = trm_s
+    macro = resolve_macro_range(anio_inicio, anio_fin, ipc_override, trm_override)
+    out["anio_inicio"] = macro["anio_inicio"]
+    out["anio_fin"] = macro["anio_fin"]
+    out["duracion"] = macro["duracion"]
+    out["ipc_acumulado"] = macro["ipc_acumulado"]
+    out["trm_promedio"] = macro["trm_promedio"]
 
     for c in out.columns:
         if c.startswith("prop_") or c.startswith("tfidf_"):
             out[c] = out[c].fillna(0.0)
 
-    for c in FEATURES_33:
-        if c not in out.columns:
-            out[c] = 0.0
+    missing = [c for c in FEATURES_35 if c not in out.columns]
+    if missing:
+        out = out.assign(**{c: 0.0 for c in missing})
 
-    keep = list(dict.fromkeys(FEATURES_33 + ["id_contrato", "n_riesgos"]))
+    keep = list(dict.fromkeys(FEATURES_35 + ["id_contrato", "n_riesgos"]))
     keep = [c for c in keep if c in out.columns]
     return out[keep]

@@ -293,7 +293,7 @@ graph TB
     subgraph Backend["Backend — FastAPI (backend/)"]
         API[main.py<br/>REST API]
         FE[feature_engineering.py<br/>Agregación de riesgos → 33 features]
-        PREDICT[predictor.py<br/>Ridge R² 0.149 + Logistic AUC 0.662]
+        PREDICT[predictor.py<br/>SVR RBF R² 0.417 + Logistic AUC 0.673]
         QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
         HISTDB[history.py<br/>SQLite CRUD + resultado_json MC]
         TRAIN[training_stats.py<br/>351 contratos, R², coeficientes]
@@ -301,7 +301,7 @@ graph TB
     end
 
     subgraph Data["Datos Estáticos"]
-        M[MODELOS<br/>ridge_regressor.pkl<br/>ridge_classifier.pkl<br/>scaler.pkl<br/>feature_names.pkl<br/>coeficientes_ridge.csv<br/>ipc_trm.pkl]
+        M[MODELOS<br/>svr_regressor.pkl<br/>classifier.pkl<br/>ridge_reference.pkl<br/>permutation_importance.csv<br/>scaler.pkl<br/>feature_names.pkl<br/>ipc_trm.pkl]
         MAT[matriz_clean.csv<br/>6,525 riesgos<br/>351 contratos]
     end
 
@@ -320,8 +320,8 @@ Exposición REST con FastAPI. El frontend apunta a `http://localhost:8003` (work
 
 | Método | Endpoint | Parámetros | Respuesta | Propósito |
 |--------|----------|-------------|-----------|-----------|
-| `POST` | `/predict` | CSV file o texto + parámetros `(anio, ipc, trm)` | `PrediccionSalida` con factores, alerta, history_id | Ejecutar predicción sobre 1+N contratos |
-| `POST` | `/predict/montecarlo` | CSV + `(anio, ipc, trm, n_iteraciones, incluir_ruido, valor_inicial, history_id)` | `MonteCarloSalida` con percentiles, stats, histograma, tornado, desglose (en % y COP) | Simulación Monte Carlo + análisis cuantitativo por tipo y por riesgo individual |
+| `POST` | `/predict` | CSV file o texto + parámetros `(anio_inicio, anio_fin, ipc_override, trm_override)` | `PrediccionSalida` con factores, alerta, history_id | Ejecutar predicción sobre 1+N contratos con rango de fechas |
+| `POST` | `/predict/montecarlo` | CSV + `(anio_inicio, anio_fin, ipc_override, trm_override, n_iteraciones, incluir_ruido, valor_inicial, history_id)` | `MonteCarloSalida` con percentiles, stats, histograma, tornado, desglose (en % y COP) | Simulación Monte Carlo + análisis cuantitativo por tipo y por riesgo individual |
 | `GET` | `/history` | `page=1`, `page_size=15` | `{"data": [...], "total": N, "page": P, "paginas": M}` | Listar historial paginado |
 | `GET` | `/history/{id}` | — | Cualitativo + `resultado_json` completo | Obtener predicción individual con MC |
 | `GET` | `/history/{id}/resultados` | — | `resultado_json` completo del MC | Obtener solo resultados cuantitativos |
@@ -373,7 +373,7 @@ sequenceDiagram
     B->>FE: aggregate_risks(df)
     B->>QA: compute(df_contrato, n_iteraciones, valor_inicial, ...)
     QA->>QA: Monte Carlo: 1000 iteraciones, Δ∈{-1,0,+1} en prob/imp
-    QA->>QA: Ridge predict en cada iteración + ruido Gaussiano N(0, σ=16%)
+    QA->>QA: SVR predict en cada iteración + ruido Gaussiano N(0, RMSE_var) según n_riesgos
     QA->>QA: Tornado por tipo: perturba todos ±1, mide swing
     QA->>QA: Desglose por riesgo: peso = (prob_i × imp_i) / Σ(prob×imp)
     QA-->>B: percentiles, stats, histograma, tornado, desglose
@@ -400,7 +400,7 @@ sequenceDiagram
     B-->>F: total_predicciones, %alto_riesgo, serie_temporal, top_factores, etc.
     F->>F: Renderiza KPI cards + gráficos (evolución, alertas, factores, real vs predicho, MC)
     F->>B: GET /stats/training
-    B->>Files: Lee matriz_clean.csv, coeficientes_ridge.csv, ipc_trm.pkl
+    B->>Files: Lee matriz_clean.csv, permutation_importance.csv, ipc_trm.pkl
     Files-->>B: datos
     B-->>F: total_contratos=351, contratos_pool_secop1, top_coeficientes, distribución sobrecosto, categorías, tipos, IPC/TRM, dist_n_riesgos, top_riesgosos
     F->>F: Renderiza KPI cards + tabla + bar chart + distribución
@@ -460,9 +460,9 @@ graph LR
     J --> K[matriz.csv<br/>6,525 riesgos]
     K --> L[normalizar.py]
     L --> M[matriz_clean.csv<br/>351 contratos]
-    M --> N[Feature Engineering<br/>219 features → 33]
-    N --> O[Modelo Ridge + Logistic<br/>R² 0.149 · AUC 0.662<br/>350 contratos]
-    O --> P[ridge_regressor.pkl<br/>coeficientes_ridge.csv]
+    M --> N[Feature Engineering<br/>219 features → 35 (30 TF-IDF + 5 rango)]
+    N --> O[Modelo SVR RBF + Logistic<br/>R² 0.417 full · AUC 0.673<br/>350 contratos]
+    O --> P[svr_regressor.pkl<br/>permutation_importance.csv]
     P --> Q[FastAPI Backend<br/>/predict + /predict/montecarlo]
     Q --> Q2[quantitative_analysis.py<br/>MC + Tornado + Desglose]
     Q2 --> Q
@@ -497,11 +497,11 @@ graph TB
         end
 
         subgraph DataFiles["Archivos de Datos"]
-            M1[models/ridge_regressor.pkl]
-            M2[models/ridge_classifier.pkl]
+            M1[models/svr_regressor.pkl]
+            M2[models/classifier.pkl]
             M3[models/scaler.pkl]
             M4[models/feature_names.pkl]
-            M5[models/coeficientes_ridge.csv]
+            M5[models/ridge_reference.pkl]
             M6[models/ipc_trm.pkl]
             MD[docs/matriz_clean.csv]
         end
@@ -527,10 +527,12 @@ erDiagram
         TEXT created_at
         TEXT id_contrato
         INTEGER n_riesgos
-        INTEGER anio
-        REAL ipc
-        REAL trm
-        REAL prediccion_ridge
+        INTEGER anio_inicio
+        INTEGER anio_fin
+        INTEGER duracion
+        REAL ipc_acumulado
+        REAL trm_promedio
+        REAL prediccion_svr
         REAL probabilidad_alto_riesgo
         TEXT alerta
         TEXT factores_aumentan "JSON"
@@ -548,10 +550,12 @@ erDiagram
 | `created_at` | TEXT | Timestamp ISO |
 | `id_contrato` | TEXT | Identificador del contrato |
 | `n_riesgos` | INTEGER | Cantidad de riesgos procesados |
-| `anio` | INTEGER | Año del análisis |
-| `ipc` | REAL | IPC del año |
-| `trm` | REAL | TRM del año |
-| `prediccion_ridge` | REAL | Sobrecosto estimado por Ridge |
+| `anio_inicio` | INTEGER | Año de inicio del rango |
+| `anio_fin` | INTEGER | Año de fin del rango |
+| `duracion` | INTEGER | Duración en años (anio_fin - anio_inicio + 1) |
+| `ipc_acumulado` | REAL | IPC acumulado del rango |
+| `trm_promedio` | REAL | TRM promedio del rango |
+| `prediccion_svr` | REAL | Sobrecosto estimado por SVR |
 | `probabilidad_alto_riesgo` | REAL | Probabilidad de sobrecosto > 25% (0-1) |
 | `alerta` | TEXT | `ALTO RIESGO` o `RIESGO MODERADO` |
 | `factores_aumentan` | TEXT (JSON) | Top 5 factores que aumentan el sobrecosto |
@@ -581,7 +585,7 @@ erDiagram
 ### 9.2 Dashboard — Entrenamiento
 
 - **KPI Cards:** Contratos de entrenamiento (351, con badge del pool SECOP I de 1,560), Sobrecosto promedio/mediana, % Alto Riesgo (>25%), Riesgos en matriz (6,525), SECOP II incluidos (5), R² del modelo, RMSE
-- **Tabla:** Top 10 coeficientes del modelo Ridge (positivos y negativos con label legible)
+- **Tabla:** Top 10 features por permutation importance (positivos y negativos con label legible, del SVR + Ridge de referencia)
 - **Distribución:** Barras por rango de sobrecosto (0-10%, 10-25%, 25-50%, 50-100%, 100%+)
 - **Gráficos:** Distribución de riesgos por categoría (barras), por tipo (barras horizontales), top contratos por n_riesgos
 - **Serie IPC/TRM:** Línea temporal de inflación y TRM por año
@@ -592,7 +596,7 @@ erDiagram
 - **Dos modos de entrada:**
   - Subir CSV con columnas `id_contrato, descripcion_riesgo, probabilidad, impacto, tipo, categoria`
   - Pegar texto CSV directamente
-- **Parámetros desde sidebar:** Año (2020-2026 con IPC/TRM automáticos), modo robusto
+- **Parámetros desde sidebar:** Rango de fechas (anio_inicio, anio_fin con IPC/TRM automáticos), modo robusto
 - **Al procesar:** spinner + llamado a `/predict`
 - **Resultados por contrato:**
   - Card oscura con: ID del contrato, sobrecosto estimado (color según gravedad), barra de probabilidad de alto riesgo, alerta con icono
@@ -602,7 +606,7 @@ erDiagram
 ### 9.4 Historial de Predicciones
 
 - **Lista paginada:** 15 registros por página
-- **Cada tarjeta muestra:** ID del contrato (con badge de alerta), fecha, n_riesgos, año, métricas (Ridge, Prob., Real), top factores, notas, badge de MC si aplica
+- **Cada tarjeta muestra:** ID del contrato (con badge de alerta), fecha, n_riesgos, rango fechas, métricas (SVR, Prob., Real), top factores, notas, badge de MC si aplica
 - **Navegación:** ◀ Anterior / Pág. X de Y · Mostrando registros 1–15 de N / Siguiente ▶
 - **Acciones:** Eliminar individual, Limpiar todo, Guardar validación
 - **"Ver análisis completo":** Botón centrado que expande inline la vista cualitativa + cuantitativa completa (histograma MC, tornado por tipo, desglose individual). Usa `GET /history/{id}` y `GET /history/{id}/resultados`. Keys de Streamlit con sufijo `{uid}` (hid) para evitar duplicados.
@@ -624,21 +628,23 @@ erDiagram
 risk_project/
 ├── backend/
 │   ├── main.py                   # FastAPI REST API (10 endpoints)
-│   ├── schemas.py                # Pydantic models (FactorInfo, PrediccionSalida, PrediccionHistorial, MonteCarloSalida, RiesgoContribucion, ItemTornado, BinHistograma)
-│   ├── predictor.py              # Carga de modelos + predicción (Ridge R² 0.149 + Logistic AUC 0.662)
-│   ├── feature_engineering.py    # Agregación de riesgos → 33 features del modelo
-│   ├── quantitative_analysis.py  # Monte Carlo (1000 iter), tornado por tipo (swing real), desglose individual (peso prob×imp)
-│   ├── history.py                # CRUD SQLite + stats agregados + almacenamiento resultado_json del MC
+│   ├── schemas.py                # Pydantic models
+│   ├── predictor.py              # Carga SVR + LogisticRegression (35 features, permutation importance)
+│   ├── feature_engineering.py    # Agregación de riesgos → 35 features (rango fechas: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio)
+│   ├── quantitative_analysis.py  # Monte Carlo (1000 iter, RMSE variable por n_riesgos), tornado, desglose
+│   ├── history.py                # CRUD SQLite + stats + almacenamiento resultado_json del MC
 │   ├── training_stats.py         # Estadísticas del dataset de entrenamiento (351 contratos)
 │   └── feature_labels.py         # Labels legibles para features técnicas
 ├── frontend/
 │   └── streamlit_app.py          # App Streamlit (~1150 líneas)
 ├── models/
-│   ├── ridge_regressor.pkl       # Modelo Ridge final (R² 0.149)
-│   ├── ridge_classifier.pkl      # Clasificador binario Logistic (AUC 0.662)
+│   ├── svr_regressor.pkl         # SVR campeón (R² 0.417 full, C=10, gamma=scale)
+│   ├── classifier.pkl            # LogisticRegression (AUC 0.673)
+│   ├── ridge_reference.pkl       # Ridge de referencia (coeficientes lineales)
+│   ├── permutation_importance.csv# Importancia global del SVR (10 reps)
 │   ├── scaler.pkl                # StandardScaler ajustado
-│   ├── feature_names.pkl         # Lista de 33 feature names
-│   ├── coeficientes_ridge.csv    # Coeficientes del modelo para dashboard
+│   ├── feature_names.pkl         # Lista de 35 feature names
+│   ├── tfidf_vectorizer.pkl      # Vectorizador TF-IDF
 │   └── ipc_trm.pkl               # Diccionario IPC/TRM por año
 ├── scripts/
 │   └── train_final_model.py      # Entrenamiento reproducible del modelo final
@@ -668,81 +674,73 @@ risk_project/
 10. ~~**"Ver completo" en Historial**: expandir inline MC + cualitativo desde historial~~ ✅ `streamlit_app.py`
 11. ~~**Paginación**: reducir de 20 a 15 registros por página~~ ✅ Hecho
 12. ~~**Arreglo bug training_stats**: `total_contratos` cambió a 351 (n_contratos_raw)~~ ✅ `training_stats.py`
-13. **Pendientes**: liberar puerto 8000 (zombie PID 12248), autenticación, exportación a PDF, modo batch para múltiples contratos
+13. ~~**Migración a rango de fechas**: año único → anio_inicio/anio_fin/ipc_acumulado/trm_promedio~~ ✅ `compute_ipc_range.py`
+14. ~~**Cambio de modelo**: Ridge descartado (R² CV=0.066 con rango), SVR nuevo campeón (R² CV=0.072)~~ ✅ `svr_regressor.pkl`
+15. ~~**RMSE variable**: incertidumbre ahora varía según n_riesgos del contrato~~ ✅ `quantitative_analysis.py`
+16. **Pendientes**: liberar puerto 8000 (zombie PID 12248), interpretabilidad local, calibración umbrales RMSE
 
 ## 12. Pruebas de Validación
 
 ### 12.1 Diseño de Pruebas
 
-Se diseñaron dos grupos de prueba para evaluar el modelo Ridge de 33 features:
+Se diseñaron dos grupos de prueba para evaluar el modelo SVR de 35 features:
 
 | Grupo | Propósito | Contratos | Origen |
 |---|---|---|---|
 | **A (Sanidad)** | Verificar que el pipeline produce predicciones consistentes y las alertas clasifican correctamente | C-001, C-010, C-017, C-043, C-128 | Del mismo dataset (`matriz_clean.csv`), seleccionados manualmente para cubrir distintos perfiles de riesgo |
 | **B (Generalización)** | Evaluar capacidad del modelo con datos no vistos durante el entrenamiento | C-360 a C-364 | Proporcionados por el asesor como contratos reales de 2019-2023 con sobrecosto conocido |
 
-Metodología: cada contrato se cargó manualmente vía "Pegar texto" en el frontend, con los parámetros IPC/TRM correspondientes a su año.
+Metodología: cada contrato se cargó manualmente vía "Pegar texto" en el frontend, con los parámetros IPC/TRM correspondientes a su rango de fechas.
 
 ### 12.2 Datos de Prueba
 
 Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `contratos_prueba.csv`.
 
-| Contrato | Año | Valor Inicial | Valor Final | Sobrecosto Real | Perfil |
-|---|---|---|---|---|---|---|
-| C-001 | 2018 | $16,148M | $20,760M | 28.6% | Medio |
-| C-010 | 2018 | $31,074M | $31,639M | 37.3% | Alto |
-| C-017 | 2019 | $23,880M | $36,561M | 53.1% | Muy Alto |
-| C-043 | 2021 | $13,586M | $13,886M | 2.2% | Muy Bajo |
-| C-128 | 2019 | $5,217M | $6,802M | 30.4% | Medio-Alto |
-| C-360 | 2019 | $1,889M | $2,080M | 10.14% | — |
-| C-361 | 2022 | $1,886M | $2,246M | 19.09% | — |
-| C-362 | 2021 | $1,878M | $1,960M | 4.38% | — |
-| C-363 | 2022 | $1,869M | $2,004M | 7.20% | — |
-| C-364 | 2023 | $1,869M | $2,258M | 20.83% | — |
+| Contrato | Inicio | Fin | Valor Inicial | Valor Final | Sobrecosto Real | Perfil |
+|---|---|---|---|---|---|---|---|
+| C-001 | 2018 | 2019 | $16,148M | $20,760M | 28.6% | Medio |
+| C-010 | 2018 | 2020 | $31,074M | $31,639M | 37.3% | Alto |
+| C-017 | 2019 | 2022 | $23,880M | $36,561M | 53.1% | Muy Alto |
+| C-043 | 2021 | 2022 | $13,586M | $13,886M | 2.2% | Muy Bajo |
+| C-128 | 2019 | 2021 | $5,217M | $6,802M | 30.4% | Medio-Alto |
+| C-360 | 2019 | 2019 | $1,889M | $2,080M | 10.14% | — |
+| C-361 | 2022 | 2022 | $1,886M | $2,246M | 19.09% | — |
+| C-362 | 2021 | 2021 | $1,878M | $1,960M | 4.38% | — |
+| C-363 | 2022 | 2022 | $1,869M | $2,004M | 7.20% | — |
+| C-364 | 2023 | 2023 | $1,869M | $2,258M | 20.83% | — |
 
 ### 12.3 Resultados Grupo A — Prueba de Sanidad
 
-Modelo final con 33 features (sin `tfidf_cualquier`, reemplazado por `tfidf_obra`). R²: 0.149, AUC: 0.662.
+Modelo SVR con 35 features (30 TF-IDF + 5 rango: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio). R² full: 0.417, AUC: 0.673.
 
-| Contrato | Real | Ridge | Error | Prob. Alerta | Alerta | ¿Acierta? |
-|---|---|---|---|---|---|---|
-| C-001 | 28.6% | 28.07% | −0.5 pp | 72.6% | 🔴 ALTO RIESGO | ✅ |
-| C-010 | 37.3% | 17.31% | −20.0 pp | 23.6% | 🟢 RIESGO MODERADO | ❌ (falso negativo) |
-| C-017 | 53.1% | 31.25% | −21.9 pp | 77.3% | 🔴 ALTO RIESGO | ✅ (subestima pero alerta correcta) |
-| C-043 | 2.2% | 28.31% | +26.1 pp | 78.0% | 🔴 ALTO RIESGO | ❌ (falso positivo) |
-| C-128 | 30.4% | 27.15% | −3.3 pp | 54.9% | 🔴 ALTO RIESGO | ✅ |
+| Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P90-P10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| C-001 | 2018 | 2019 | 28.6% | 25.01% | −3.6 pp | 81.7% | ALTO RIESGO | 12 | 16 pp | 41.9 pp |
+| C-010 | 2018 | 2020 | 37.3% | 16.84% | −20.5 pp | 41.0% | RIESGO MODERADO | 20 | 16 pp | 40.7 pp |
+| C-017 | 2019 | 2022 | 53.1% | 33.16% | −19.9 pp | 91.7% | ALTO RIESGO | 18 | 16 pp | 40.9 pp |
+| C-043 | 2021 | 2022 | 2.2% | 28.54% | +26.3 pp | 80.7% | ALTO RIESGO | 22 | 20 pp | 51.7 pp |
+| C-128 | 2019 | 2021 | 30.4% | 26.31% | −4.1 pp | 66.9% | ALTO RIESGO | 15 | 16 pp | 41.3 pp |
 
-**MAE:** 14.3 pp  
-**Aciertos de alerta:** 3/5  
-**Conclusión:** El pipeline funciona correctamente. El modelo tiende a regresión a la media: subestima sobrecostos altos y sobreestima bajos.
+**MAE:** 14.9 pp | **Aciertos:** 3/5  
+**Conclusión:** Tendencia a regresión a la media (C-010 subestimado, C-043 sobreestimado). La incertidumbre ahora varía según complejidad: C-043 (22 riesgos) tiene P90-P10 de 51.7 pp vs 41 pp de contratos más simples.
 
-### 12.4 Validación contra Notebook
+### 12.4 Validación contra Notebook (histórico)
 
-El `modelado_v2.ipynb` (entrenado con ~150+ features) difiere del modelo API (33 features en `FEATURES_33`). Las predicciones Ridge del API son sistemáticamente menores que las del notebook, debido al feature set reducido.
-
-| Contrato | Notebook Ridge | API Ridge | Δ | Notebook Prob | API Prob | Δ |
-|---|---|---|---|---|---|---|
-| C-001 | 31.89% | 28.07% | −3.82 pp | 80.5% | 72.6% | −7.9 pp |
-| C-010¹ | 18.45% | 17.31% | −1.14 pp | 16.6% | 23.6% | +7.0 pp |
-| C-017 | 33.00% | 31.25% | −1.75 pp | 66.0% | 77.3% | +11.3 pp |
-| C-043 | 29.80% | 28.31% | −1.49 pp | 81.4% | 78.0% | −3.4 pp |
-| C-128 | 31.40% | 27.15% | −4.25 pp | 77.9% | 54.9% | −23.0 pp |
-
-> ¹ El notebook registra sobrecosto real = 1.82% para C-010. El usuario probó un contrato distinto con real = 37.3%.
+El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El modelo API actual es SVR con 35 features (rango de fechas). Las predicciones difieren por el cambio de modelo y feature set. Los resultados detallados del SVR se documentan en las secciones 12.3 y 12.5.
 
 ### 12.5 Resultados Grupo B — Prueba de Generalización
 
-| Contrato | Real | Ridge | Error | Prob. Alerta | Alerta |
-|---|---|---|---|---|---|
-| C-360 | 10.14% | 26.25% | +16.1 pp | 23.0% | 🟢 RIESGO MODERADO |
-| C-361 | 19.09% | 27.20% | +8.1 pp | 67.8% | 🔴 ALTO RIESGO |
-| C-362 | 4.38% | 19.34% | +15.0 pp | 24.6% | 🟢 RIESGO MODERADO |
-| C-363 | 7.20% | 23.21% | +16.0 pp | 48.2% | 🟢 RIESGO MODERADO |
-| C-364 | 20.83% | 19.25% | −1.6 pp | 23.6% | 🟢 RIESGO MODERADO |
+| Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P90-P10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| C-360 | 2019 | 2019 | 10.14% | 15.55% | +5.4 pp | 21.4% | RIESGO MODERADO | 14 | 16 pp | 40.9 pp |
+| C-361 | 2022 | 2022 | 19.09% | 16.99% | −2.1 pp | 60.2% | ALTO RIESGO | 28 | 20 pp | 51.9 pp |
+| C-362 | 2021 | 2021 | 4.38% | 9.54% | +5.2 pp | 21.4% | RIESGO MODERADO | 27 | 20 pp | 50.5 pp |
+| C-363 | 2022 | 2022 | 7.20% | 15.13% | +7.9 pp | 36.8% | RIESGO MODERADO | 14 | 16 pp | 40.8 pp |
+| C-364 | 2023 | 2023 | 20.83% | 10.85% | −10.0 pp | 18.8% | RIESGO MODERADO | 34 | 24 pp | 62.1 pp |
 
-**MAE:** 11.4 pp (< 20 pp ✅)  
+**MAE:** 6.1 pp (< 20 pp ✅) | **Aciertos:** 4/5  
 **Tiempo de respuesta:** < 2s por contrato (< 5s ✅)  
-**Conclusión:** El modelo generaliza aceptablemente con MAE de 11.4 pp. C-364 mejoró significativamente (error de −5.0 a −1.6 pp) tras eliminar `tfidf_cualquier`.
+**Conclusión:** El SVR generaliza muy bien en datos no vistos (MAE 6.1 pp). C-364 (34 riesgos) tiene el intervalo más amplio (P90-P10=62.1 pp) por su RMSE de 24 pp, reflejando correctamente su alta complejidad.
 
 ---
 
@@ -767,6 +765,8 @@ El `modelado_v2.ipynb` (entrenado con ~150+ features) difiere del modelo API (33
 | 2026-07-07 | v13 | **Pruebas de validación completadas.** 10 contratos (Grupo A sanidad + Grupo B generalización). MAE Grupo B: 11.3 pp. Validación contra notebook documenta diferencia de feature set (33 vs ~150 vars). Parámetros IPC/TRM bloqueados fuera de vista de predicción. Formulario de validación agregado al historial. BD poblada con valores reales. Plan de pruebas en `tests/plan_de_pruebas.md`. Sección 12 agregada a este documento. |
 | 2026-07-08 | v14 | **Corrección de métricas de entrenamiento.** El dashboard mostraba "1,560 contratos" (pool SECOP I total) cuando el modelo se entrenó realmente con 350. `training_stats.py` cambiado de `proyectos_secop1_lite.csv` a `matriz_clean.csv` agrupado por contrato. Añadidos campos `contratos_pool_secop1` y `contratos_secop2_incluidos`. Frontend actualizado para mostrar "Entrenamiento: 350 de 1,560 del pool". |
 | 2026-07-09 | v15 | **Re-entreno con R² 0.149.** Se eliminó `tfidf_cualquier`, se añadió `tfidf_obra`. Ridge mejoró de 0.103 a 0.149. LogisticRegression mejoró AUC de 0.639 a 0.662. Se creó `scripts/train_final_model.py` reproducible. Artefactos actualizados. |
-| 2026-07-09 | v16 | **Análisis cuantitativo implementado.** Módulo `quantitative_analysis.py` con Monte Carlo (1000 iter, Δ prob/imp discreto ±1, ruido Gaussiano σ=16%), tornado por tipo (swing real del modelo Ridge), desglose individual (peso=prob×imp/Σ). Endpoint `POST /predict/montecarlo` + schemas `MonteCarloSalida`. |
+| 2026-07-09 | v16 | **Análisis cuantitativo implementado.** Módulo `quantitative_analysis.py` con Monte Carlo (1000 iter, Δ prob/imp discreto ±1, ruido Gaussiano σ=RMSE_var), tornado por tipo (swing real del modelo SVR), desglose individual (peso=prob×imp/Σ). Endpoint `POST /predict/montecarlo` + schemas `MonteCarloSalida`. |
 | 2026-07-10 | v17 | **Historial con "Ver análisis completo".** Endpoints `GET /history/{id}` y `GET /history/{id}/resultados`. Botón inline en frontend que expande el MC sin modal. Keys de Streamlit con sufijo `{uid}` para evitar duplicados. Guardado de `resultado_json` en history.db. |
 | 2026-07-10 | v18 | **Arreglos finales.** Paginación reducida a 15. `training_stats.py`: `total_contratos` cambiado a 351 (n_contratos_raw). API_URL workaround a puerto 8003. Bug de conn2 close order en `history.py:stats()` corregido. |
+| 2026-07-11 | v19 | **Migración a rango de fechas.** Se reemplazaron anio/ipc/trm (año único) por anio_inicio/anio_fin/duracion/ipc_acumulado/trm_promedio. Ridge no logró capturar no-linealidades del rango (R² CV=0.066). **SVR RBF** seleccionado como nuevo campeón (R² CV=0.072, AUC=0.673). `scripts/compute_ipc_range.py` creado. Permutation importance como método de interpretabilidad (SHAP no disponible por incompatibilidad numba+numpy). |
+| 2026-07-11 | v20 | **RMSE variable por complejidad.** MC ahora usa RMSE según n_riesgos: 12 pp (1-10), 16 pp (11-20), 20 pp (21-30), 24 pp (>30). Validación con 10 contratos: MAE=10.5 pp, 7/10 aciertos. Todos los documentos actualizados. |

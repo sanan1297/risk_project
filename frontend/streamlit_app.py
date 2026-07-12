@@ -247,7 +247,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ─── SIDEBAR ──────────────────────────────────────────
-RANGO_ANOS = list(range(2000, 2026))
+RANGO_ANOS = list(range(2000, 2028))
 IPC_TRM = {
     2000: {"ipc": 8.75, "trm": 2052.0}, 2001: {"ipc": 7.65, "trm": 2200.0},
     2002: {"ipc": 6.99, "trm": 2504.0}, 2003: {"ipc": 6.49, "trm": 2878.0},
@@ -262,34 +262,69 @@ IPC_TRM = {
     2020: {"ipc": 1.61, "trm": 3693.36}, 2021: {"ipc": 5.62, "trm": 3743.09},
     2022: {"ipc": 13.12, "trm": 4255.44}, 2023: {"ipc": 9.28, "trm": 4325.05},
     2024: {"ipc": 5.20, "trm": 4071.28}, 2025: {"ipc": 5.10, "trm": 4052.86},
+    2026: {"ipc": 6.40, "trm": 4200.0}, 2027: {"ipc": 4.80, "trm": 4100.0},
 }
 
+def _compute_macro_display(anio_inicio, anio_fin):
+    if anio_inicio is None or anio_fin is None:
+        return None, None, None
+    ipc_acum = 1.0
+    trm_vals = []
+    for y in range(anio_inicio, anio_fin + 1):
+        d = IPC_TRM.get(y, {"ipc": 3.0, "trm": 4000})
+        ipc_acum *= (1 + d["ipc"] / 100)
+        trm_vals.append(d["trm"])
+    ipc_acum = (ipc_acum - 1) * 100
+    trm_prom = sum(trm_vals) / len(trm_vals) if trm_vals else 0
+    return round(ipc_acum, 2), round(trm_prom, 2), anio_fin - anio_inicio
+
+
 with st.sidebar:
-    st.markdown("### :material/tune: Parámetros IPC / TRM")
+    st.markdown("### :material/tune: Parámetros Macroeconómicos")
     editable = view == "predict"
-    anio_sel = st.selectbox(
-        "Año del contrato",
-        [None] + RANGO_ANOS,
-        format_func=lambda x: "Seleccionar..." if x is None else str(x),
+
+    dflt_idx = RANGO_ANOS.index(2022) if 2022 in RANGO_ANOS else 0
+    anio_inicio_sel = st.selectbox(
+        "Año inicio del proyecto",
+        RANGO_ANOS,
+        index=dflt_idx,
         disabled=not editable,
+        key="anio_inicio_sel",
     )
-    def_val = IPC_TRM.get(anio_sel, {}) if anio_sel else {}
-    ipc_val = st.number_input("IPC (%)", value=def_val.get("ipc"), step=0.01, format="%.2f", disabled=not editable)
-    trm_val = st.number_input("TRM (COP/USD)", value=def_val.get("trm"), step=1.0, format="%.0f", disabled=not editable)
-    if anio_sel and anio_sel in IPC_TRM:
-        st.caption(f":material/auto_awesome: Datos precargados")
-    elif anio_sel and anio_sel not in IPC_TRM:
-        st.warning("Ingresá IPC y TRM manualmente", icon=":material/edit:")
+    anios_fin = [a for a in RANGO_ANOS if a >= anio_inicio_sel]
+    fin_dflt_idx = min(2, len(anios_fin) - 1) if anio_inicio_sel == 2022 else len(anios_fin) - 1
+    anio_fin_sel = st.selectbox(
+        "Año fin del proyecto",
+        anios_fin,
+        index=fin_dflt_idx,
+        disabled=not editable,
+        key="anio_fin_sel",
+    )
+
+    dur = anio_fin_sel - anio_inicio_sel
+    st.caption(f":material/calendar_month: Duración: {dur} año(s) {'(máx 5)' if dur > 5 else ''}")
+    if dur > 5:
+        st.warning("La duración máxima es 5 años. Se usará anio_inicio + 5.", icon=":material/warning:")
+
+    ipc_acum_auto, trm_prom_auto, _ = _compute_macro_display(anio_inicio_sel, min(anio_fin_sel, anio_inicio_sel + 5))
+    if ipc_acum_auto is not None:
+        st.caption(f":material/auto_awesome: IPC acum.: {ipc_acum_auto:.2f}%  |  TRM prom.: ${trm_prom_auto:,.0f}")
+
+    with st.expander("Override manual (opcional)"):
+        ipc_override_val = st.number_input("IPC acumulado manual (%)", value=None, step=0.01, format="%.2f", disabled=not editable)
+        trm_override_val = st.number_input("TRM promedio manual (COP/USD)", value=None, step=1.0, format="%.0f", disabled=not editable)
+        st.caption("Si se ingresan, reemplazan los valores calculados automáticamente.")
 
     st.space("large")
     with st.container(border=True):
         st.markdown("**:material/bar_chart: Rendimiento del Modelo**")
-        st.caption("R²: 0.149")
-        st.caption("AUC CV: 0.662 ± 0.026")
-        st.caption("RMSE: 16.0 pp")
+        st.caption("R² CV: 0.068")
+        st.caption("AUC CV: 0.673")
+        st.caption("RMSE: 17.1 pp")
+        st.caption("Modelo: SVR kernel RBF")
 
     st.space("large")
-    st.caption("Risk Control Dashboard v0.5")
+    st.caption("Risk Control Dashboard v0.6")
 
 
 # ─── MODEL METRICS LABELS ──────────────────────────────
@@ -307,12 +342,12 @@ def _call_api(data_bytes, text_data, filename):
         files = {"file": (filename or "datos.csv", data_bytes, "text/csv")}
     elif text_data is not None:
         form["riesgos"] = text_data
-    if anio_sel is not None:
-        form["anio"] = str(anio_sel)
-    if ipc_val is not None:
-        form["ipc"] = str(ipc_val)
-    if trm_val is not None:
-        form["trm"] = str(trm_val)
+    form["anio_inicio"] = str(anio_inicio_sel)
+    form["anio_fin"] = str(anio_fin_sel)
+    if ipc_override_val is not None:
+        form["ipc_override"] = str(ipc_override_val)
+    if trm_override_val is not None:
+        form["trm_override"] = str(trm_override_val)
     try:
         return requests.post(f"{API_URL}/predict", files=files, data=form, timeout=30)
     except requests.ConnectionError:
@@ -321,16 +356,11 @@ def _call_api(data_bytes, text_data, filename):
 
 
 def _validate_required_params():
-    """Verifica que `anio_sel`, `ipc_val` y `trm_val` estén presentes en la barra lateral.
-    Muestra un error en la UI y devuelve False si falta alguno.
-    """
     missing = []
-    if anio_sel is None:
-        missing.append("Año")
-    if ipc_val is None:
-        missing.append("IPC")
-    if trm_val is None:
-        missing.append("TRM")
+    if anio_inicio_sel is None:
+        missing.append("Año inicio")
+    if anio_fin_sel is None:
+        missing.append("Año fin")
     if missing:
         st.error(f"Parámetros obligatorios faltantes: {', '.join(missing)}")
         return False
@@ -536,7 +566,7 @@ def _render_tab_entrenamiento():
     <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr);">
       {kpi_card("Matriz de Riesgos", f"{trm_f:,}", f"{tc} contratos (+{secop2} SECOP II)", ("#7B5CE4", "#b06ff2"), True)}
       {kpi_card("Riesgos x Contrato", f"{dn.get('media', 0):.0f}", f"min: {dn.get('min', 0)} · máx: {dn.get('max', 0)}", ("#1ABC9C", "#2ECC71"), True)}
-      {kpi_card("Features del Modelo", "33", "top: tfidf_diseños +1.24", ("#E91E63", "#FF6F61"), True)}
+      {kpi_card("Features del Modelo", "35", "top: tfidf_diseños +1.31", ("#E91E63", "#FF6F61"), True)}
     </div>
     """)
 
@@ -655,9 +685,11 @@ def _render_tab_entrenamiento():
             "auc_cv": "Capacidad de separar alto riesgo",
             "rmse": "Error típico de la predicción",
         }
-        st.html(f'<div class="chart-card"><div class="chart-title">Rendimiento del Modelo</div><div class="chart-subtitle">Métricas del modelo actual (33 features)</div>')
+        st.html(f'<div class="chart-card"><div class="chart-title">Rendimiento del Modelo</div><div class="chart-subtitle">Métricas del modelo actual (35 features por rango de fechas)</div>')
         met_cols = st.columns([2.2, 1.6, 1.6, 1.6])
         for i, (k, v) in enumerate(modelo.items()):
+            if k not in DESCRIPCIONES_METRICAS and k != "modelo":
+                continue
             if k == "modelo":
                 with met_cols[0]:
                     st.markdown(
@@ -668,7 +700,8 @@ def _render_tab_entrenamiento():
                         unsafe_allow_html=True,
                     )
             else:
-                with met_cols[-(i) if i > 0 else i]:
+                col_idx = list(modelo.keys()).index(k)
+                with met_cols[col_idx]:
                     label = MODEL_METRICS_LABELS.get(k, k)
                     desc = DESCRIPCIONES_METRICAS.get(k, "")
                     st.markdown(
@@ -1083,11 +1116,13 @@ def _render_history():
                                 f'{alerta}</span>',
                                 unsafe_allow_html=True,
                             )
+                            anio_ini = h.get("anio_inicio") or h.get("anio") or "?"
+                            anio_f = h.get("anio_fin") or anio_ini
                             st.markdown(
                                 f'<span style="color: #000000; font-size: 0.8rem;">'
                                 f'🕐 {h["created_at"][:16]} · '
                                 f'📋 {h["n_riesgos"]} riesgos · '
-                                f'📅 año {h["anio"] or "?"}</span>',
+                                f'📅 {anio_ini}–{anio_f}</span>',
                                 unsafe_allow_html=True,
                             )
                             fa = h.get("factores_aumentan", [])[:2]
@@ -1205,12 +1240,12 @@ def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ru
         files = {"file": (filename or "datos.csv", data_bytes, "text/csv")}
     elif text_data is not None:
         form["riesgos"] = text_data
-    if anio_sel is not None:
-        form["anio"] = str(anio_sel)
-    if ipc_val is not None:
-        form["ipc"] = str(ipc_val)
-    if trm_val is not None:
-        form["trm"] = str(trm_val)
+    form["anio_inicio"] = str(anio_inicio_sel)
+    form["anio_fin"] = str(anio_fin_sel)
+    if ipc_override_val is not None:
+        form["ipc_override"] = str(ipc_override_val)
+    if trm_override_val is not None:
+        form["trm_override"] = str(trm_override_val)
     form["n_iteraciones"] = str(n_iteraciones)
     form["incluir_ruido"] = str(incluir_ruido).lower()
     if valor_inicial is not None:
@@ -1295,7 +1330,8 @@ def _mostrar_resultados_mc(data: dict, uid: str = ""):
     st.markdown(f'<div class="chart-title" style="margin-bottom:1.2rem; color: #000000;">Análisis Cuantitativo — Impacto Monetario por Riesgo</div>', unsafe_allow_html=True)
 
     if tiene_cop and vi:
-        st.markdown(f'<p style="color:#000000;font-size:0.85rem;margin:0;">Valor inicial del contrato: {_fmt_cop(vi)} COP  |  {n_sim} simulaciones  |  {"Ruido RMSE incluido" if ruido_incl else "Solo perturbación de inputs"}</p>', unsafe_allow_html=True)
+        rmse = data.get("rmse", 16.0)
+        st.markdown(f'<p style="color:#000000;font-size:0.85rem;margin:0;">Valor inicial del contrato: {_fmt_cop(vi)} COP  |  {n_sim} simulaciones  |  {"Ruido RMSE incluido" if ruido_incl else "Solo perturbación de inputs"}  |  RMSE: {rmse:.0f} pp</p>', unsafe_allow_html=True)
         st.markdown(f'<div class="chart-title" style="margin-bottom:1.2rem; color: #000000;"></div>', unsafe_allow_html=True)
         
     # ─── Tabla de impacto por riesgo (tornado en COP + %) ───
@@ -1473,8 +1509,29 @@ def _mostrar_resultados_mc(data: dict, uid: str = ""):
                 df_display = df_r[["riesgo", "tipo", "categoria", "probabilidad", "impacto", "peso_contribucion", "contribucion_porcentaje"]].copy()
                 if tiene_cop:
                     df_display["contribucion_porcentaje"] = df_display["contribucion_porcentaje"].apply(_fmt_cop)
-                df_display.columns = ["Riesgo", "Tipo", "Categoría", "Prob", "Imp", "Peso", "Contribución"]
-                st.dataframe(df_display, use_container_width=True, hide_index=True)
+                rows_html = ""
+                for _, r2 in df_display.iterrows():
+                    riesgo = str(r2["riesgo"]).replace("<", "&lt;").replace(">", "&gt;")
+                    rows_html += "<tr>"
+                    rows_html += f'<td style="word-break:break-word;white-space:normal;max-width:250px;padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;color:#1E293B;">{riesgo}</td>'
+                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;color:#475569;">{r2["tipo"]}</td>'
+                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;color:#475569;">{r2["categoria"]}</td>'
+                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;text-align:center;">{r2["probabilidad"]}</td>'
+                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;text-align:center;">{r2["impacto"]}</td>'
+                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;text-align:center;">{r2["peso_contribucion"]}</td>'
+                    rows_html += f'<td style="padding:6px 8px;border-bottom:1px solid #E2E8F0;font-size:0.8rem;font-weight:600;text-align:right;white-space:nowrap;">{r2["contribucion_porcentaje"]}</td>'
+                    rows_html += "</tr>"
+                st.markdown(f"""<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:#F1F5F9;">
+                <th style="padding:8px;text-align:left;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Riesgo</th>
+                <th style="padding:8px;text-align:left;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Tipo</th>
+                <th style="padding:8px;text-align:left;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Categoría</th>
+                <th style="padding:8px;text-align:center;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Prob</th>
+                <th style="padding:8px;text-align:center;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Imp</th>
+                <th style="padding:8px;text-align:center;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Peso</th>
+                <th style="padding:8px;text-align:right;font-size:0.75rem;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #CBD5E1;">Contrib.</th>
+                </tr></thead>
+                <tbody>{rows_html}</tbody></table></div>""", unsafe_allow_html=True)
 
 
 # ─── RENDER ────────────────────────────────────────────

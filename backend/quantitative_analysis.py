@@ -12,7 +12,15 @@ VAR_FEATURE_NAMES = [
 ]
 
 
-RMSE = 16.0
+def _rmse_por_contrato(n_riesgos: int) -> float:
+    if n_riesgos <= 10:
+        return 12.0
+    elif n_riesgos <= 20:
+        return 16.0
+    elif n_riesgos <= 30:
+        return 20.0
+    else:
+        return 24.0
 
 
 def _build_x(df_feat, feature_names, probs, imps, idx_var):
@@ -43,9 +51,10 @@ def _cop(valor, vi):
 
 def compute(
     df_contrato: pd.DataFrame,
-    anio: int | None = None,
-    ipc: float | None = None,
-    trm: float | None = None,
+    anio_inicio: int | None = None,
+    anio_fin: int | None = None,
+    ipc_override: float | None = None,
+    trm_override: float | None = None,
     n_iteraciones: int = 1000,
     seed: int = 42,
     incluir_ruido: bool = True,
@@ -58,8 +67,9 @@ def compute(
 
     idx_var = [list(feature_names).index(n) for n in VAR_FEATURE_NAMES]
 
-    df_feat = aggregate_risks(df_contrato, anio=anio, ipc=ipc, trm=trm)
+    df_feat = aggregate_risks(df_contrato, anio_inicio=anio_inicio, anio_fin=anio_fin, ipc_override=ipc_override, trm_override=trm_override)
     n_riesgos = len(df_contrato)
+    rmse = _rmse_por_contrato(n_riesgos)
     probs_orig = df_contrato["probabilidad"].values.astype(float)
     imps_orig = df_contrato["impacto"].values.astype(float)
 
@@ -76,7 +86,7 @@ def compute(
         X_s = scaler.transform(X)
         pred = regressor.predict(X_s)[0]
         if incluir_ruido:
-            pred += rng.normal(0, RMSE)
+            pred += rng.normal(0, rmse)
         muestras[i] = pred
 
     percentiles = {}
@@ -151,7 +161,7 @@ def compute(
         "tornado": tornado,
         "riesgos": riesgo_cuantitativo,
         "n_simulaciones": n_iteraciones,
-        "rmse": RMSE,
+        "rmse": rmse,
         "ruido_incluido": incluir_ruido,
     }
 

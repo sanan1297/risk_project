@@ -9,21 +9,29 @@ ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "models"
 
 MODEL_META = {
-    "modelo": "Ridge + LogisticRegression",
-    "r2_cv": 0.149,
-    "auc_cv": 0.662,
-    "rmse": 16.0,
+    "modelo": "SVR (kernel RBF)",
+    "r2_cv": 0.068,
+    "auc_cv": 0.673,
+    "rmse": 17.1,
+    "features": 35,
+    "tipo_control": "rango_fechas",
 }
 
 
 @lru_cache(maxsize=1)
 def _load_artifacts():
     return (
-        joblib.load(MODELS_DIR / "ridge_regressor.pkl"),
-        joblib.load(MODELS_DIR / "ridge_classifier.pkl"),
+        joblib.load(MODELS_DIR / "svr_regressor.pkl"),
+        joblib.load(MODELS_DIR / "classifier.pkl"),
         joblib.load(MODELS_DIR / "scaler.pkl"),
         joblib.load(MODELS_DIR / "feature_names.pkl"),
     )
+
+
+@lru_cache(maxsize=1)
+def _load_permutation_importance():
+    df = pd.read_csv(MODELS_DIR / "permutation_importance.csv")
+    return df.sort_values("importance", ascending=False)
 
 
 def load():
@@ -40,9 +48,9 @@ def predict(df_features: pd.DataFrame) -> dict:
     probas = np.round(classifier.predict_proba(X_scaled)[:, 1], 4)
     alerts = ["ALTO RIESGO" if p > 0.5 else "RIESGO MODERADO" for p in probas]
 
-    coef_df = pd.DataFrame({"feature": feature_names, "coef": regressor.coef_})
-    top_pos = coef_df.sort_values("coef", ascending=False).head(5)
-    top_neg = coef_df.sort_values("coef", ascending=True).head(5)
+    imp_df = _load_permutation_importance()
+    top_pos = imp_df.head(5)
+    top_neg = imp_df.tail(5).sort_values("importance", ascending=True)
 
     return {
         "predicciones": preds.tolist(),
@@ -51,8 +59,8 @@ def predict(df_features: pd.DataFrame) -> dict:
         "contratos": df_features["id_contrato"].tolist(),
         "n_riesgos": df_features["n_riesgos"].tolist(),
         "explicacion": {
-            "aumentan": [{"feature": r["feature"], "coef": round(r["coef"], 4)} for _, r in top_pos.iterrows()],
-            "disminuyen": [{"feature": r["feature"], "coef": round(r["coef"], 4)} for _, r in top_neg.iterrows()],
+            "aumentan": [{"feature": r["feature"], "coef": round(r["importance"], 4)} for _, r in top_pos.iterrows()],
+            "disminuyen": [{"feature": r["feature"], "coef": round(-r["importance"], 4)} for _, r in top_neg.iterrows()],
         },
         **MODEL_META,
     }

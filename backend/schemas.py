@@ -74,14 +74,19 @@ class PrediccionHistorial(BaseModel):
     created_at: str
     id_contrato: str
     n_riesgos: int
-    anio: int | None
-    ipc: float | None
-    trm: float | None
+    anio: int | None = None
+    ipc: float | None = None
+    trm: float | None = None
+    anio_inicio: int | None = None
+    anio_fin: int | None = None
+    duracion: int | None = None
+    ipc_acumulado: float | None = None
+    trm_promedio: float | None = None
     prediccion_ridge: float
     probabilidad_alto_riesgo: float
     alerta: str
-    sobrecosto_real: float | None
-    notas: str | None
+    sobrecosto_real: float | None = None
+    notas: str | None = None
     factores_aumentan: list[FactorInfo]
     factores_disminuyen: list[FactorInfo]
 

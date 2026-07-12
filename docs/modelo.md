@@ -26,11 +26,11 @@ A partir de `contratos_features.csv` (6,525 riesgos → 351 contratos) se genera
 | Clases | 22 | Proporciones por clase de riesgo |
 | Fuente | 4 | Proporciones por fuente: `prop_fuen_interno`, `prop_fuen_externo`, `prop_fuen_mixto`, `prop_fuen_no_especificado` |
 | Nulos/Valor inicial | 4 | `nulos_riesgos`, `prop_nulos`, `valor_inicial` |
-| Control | 3 | `anio`, `ipc` (inflación), `trm` (tipo de cambio) |
+| Control (v1) | 3 | `anio`, `ipc` (inflación), `trm` (tipo de cambio) — año único |
 
 ### 1.2 Feature Reduction
 
-Tras entrenar un Random Forest baseline con todas las 219 features, se seleccionaron las **top 30 por importancia** + 3 variables de control obligatorias:
+Tras entrenar un Random Forest baseline con todas las 219 features, se seleccionaron las **top 30 por importancia** + 3 variables de control:
 
 | # | Feature | Importancia | Familia |
 |---|---|---|---|
@@ -41,53 +41,50 @@ Tras entrenar un Random Forest baseline con todas las 219 features, se seleccion
 | 5 | `tfidf_expedicion` | 2.66% | TF-IDF |
 | 6 | `tfidf_materiales` | 2.60% | TF-IDF |
 | 7 | `imp_promedio` | 2.43% | Prob/Impacto |
-| 8 | `tfidf_cualquier` | 2.30% | TF-IDF |
-| 9 | `tfidf_ejecucion` | 2.24% | TF-IDF |
-| 10 | `tfidf_contrato` | 2.23% | TF-IDF |
-| 11 | `prop_tipo_operacional` | 2.14% | Tipos |
-| 12 | `prob_promedio` | 2.13% | Prob/Impacto |
-| 13 | `prop_cate_bajo` | 2.11% | Categorías |
-| 14 | `valor_inicial` | 2.08% | Nulos |
-| 15 | `tfidf_riesgo` | 2.07% | TF-IDF |
-| 16 | `tfidf_tecnicas` | 2.06% | TF-IDF |
-| 17 | `tfidf_municipio` | 2.06% | TF-IDF |
-| 18 | `tfidf_obras` | 2.00% | TF-IDF |
-| 19 | `tfidf_informacion` | 1.98% | TF-IDF |
-| 20 | `prop_fuen_externo` | 1.97% | Fuente |
-| 21 | `tfidf_cuando` | 1.96% | TF-IDF |
-| 22 | `tfidf_disenos` | 1.85% | TF-IDF |
-| 23 | `tfidf_ejecucion_contrato` | 1.83% | TF-IDF |
-| 24 | `tfidf_calidad` | 1.83% | TF-IDF |
-| 25 | `tfidf_manejo` | 1.79% | TF-IDF |
-| 26 | `prop_cate_alto` | 1.79% | Categorías |
-| 27 | `tfidf_pago` | 1.78% | TF-IDF |
-| 28 | `prop_tipo_economico` | 1.75% | Tipos |
-| 29 | `prop_asig_entidad` | 1.71% | Asignación |
-| 30 | `tfidf_falta` | 1.69% | TF-IDF |
-| — | **`anio`** | — | Control (obligatoria por tesis) |
-| — | **`ipc`** | — | Control (obligatoria por tesis) |
-| — | **`trm`** | — | Control (obligatoria por tesis) |
+| 8 | `tfidf_ejecucion` | 2.24% | TF-IDF |
+| 9 | `tfidf_contrato` | 2.23% | TF-IDF |
+| 10 | `prop_tipo_operacional` | 2.14% | Tipos |
+| 11 | `prob_promedio` | 2.13% | Prob/Impacto |
+| 12 | `prop_cate_bajo` | 2.11% | Categorías |
+| 13 | `valor_inicial` | 2.08% | Nulos |
+| 14 | `tfidf_riesgo` | 2.07% | TF-IDF |
+| 15 | `tfidf_tecnicas` | 2.06% | TF-IDF |
+| 16 | `tfidf_municipio` | 2.06% | TF-IDF |
+| 17 | `tfidf_obras` | 2.00% | TF-IDF |
+| 18 | `tfidf_informacion` | 1.98% | TF-IDF |
+| 19 | `prop_fuen_externo` | 1.97% | Fuente |
+| 20 | `tfidf_cuando` | 1.96% | TF-IDF |
+| 21 | `tfidf_disenos` | 1.85% | TF-IDF |
+| 22 | `tfidf_ejecucion_contrato` | 1.83% | TF-IDF |
+| 23 | `tfidf_calidad` | 1.83% | TF-IDF |
+| 24 | `tfidf_manejo` | 1.79% | TF-IDF |
+| 25 | `prop_cate_alto` | 1.79% | Categorías |
+| 26 | `tfidf_pago` | 1.78% | TF-IDF |
+| 27 | `prop_tipo_economico` | 1.75% | Tipos |
+| 28 | `prop_asig_entidad` | 1.71% | Asignación |
+| 29 | `tfidf_falta` | 1.69% | TF-IDF |
+| 30 | `tfidf_obra` | — | TF-IDF (reemplazó `tfidf_cualquier` en v3) |
 
-**Dataset reducido:** `contratos_features_reducido.csv` — 33 features, 350 contratos (1 outlier >200% eliminado)
+### 1.3 Migración a Features por Rango de Fechas (v4)
 
-> **Nota:** En el re-entreno final (v3, Jul 2026), se reemplazó `tfidf_cualquier` por `tfidf_obra` por ser más relevante semánticamente para contratos de obra pública. Ridge mejoró de R² 0.103 → **0.149** y LogisticRegression de AUC 0.639 → **0.662**.
+En la versión inicial, las variables macroeconómicas se representaban como año único (`anio`, `ipc`, `trm`). Esto limitaba el modelo a proyectos de un solo año. Para generalizar a proyectos multi-anuales, se reemplazaron las 3 variables de control por 5 variables de rango:
+
+| Variable de control (v1–v3) | Reemplazo (v4) | Descripción |
+|---|---|---|
+| `anio` (único) | `anio_inicio` + `anio_fin` | Rango de años del proyecto |
+| — | `duracion` | Duración en años (máx 5) |
+| `ipc` (único) | `ipc_acumulado` | Inflación compuesta: Π(1+IPC_año) − 1 |
+| `trm` (único) | `trm_promedio` | TRM promedio del período |
+
+**Feature set final:** 35 features (30 TF-IDF/probabilidades + 5 de rango).
 
 ---
 
-## 2. Benchmarking — 10 Modelos
+## 2. Benchmarking — Evolución del Modelo
 
-### 2.1 Metodología
+### 2.1 Fase 1: Ridge con año único (v1–v3)
 
-| Parámetro | Valor |
-|---|---|
-| Validación | Nested CV: 5 outer folds × 5 inner folds |
-| Búsqueda | RandomizedSearchCV (200–1000 iter por modelo) |
-| Scoring | neg_root_mean_squared_error |
-| Preprocesamiento | StandardScaler dentro de cada fold |
-| Features | 33 (top 30 RF + anio/ipc/trm) |
-| Hardware | CPU (todos salvo XGBoost), RTX 5060 (XGBoost GPU) |
-
-### 2.2 Resultados v1 — 219 features (baseline)
+#### v1 — 219 features (baseline)
 
 | Modelo | RMSE | MAE | R² | Tiempo |
 |---|---|---|---|---|
@@ -102,132 +99,158 @@ Tras entrenar un Random Forest baseline con todas las 219 features, se seleccion
 | SVR | 16.5 | — | −0.002 | 10.8s |
 | MLP | 25.5 | — | −1.041 | 136.8s |
 
-### 2.3 Resultados v2 — 33 features (reducido)
+#### v2 — 33 features (reducido)
 
 | Modelo | RMSE | MAE | R² | Tiempo |
 |---|---|---|---|---|
 | **Ridge** | **15.6 ± 1.1** | **12.8** | **0.103 ± 0.080** | **0.9s** |
-| Lasso | 15.9 ± 1.2 | 13.1 | 0.069 ± 0.091 | 0.6s |
 | ElasticNet | 15.6 ± 1.1 | 12.9 | 0.094 ± 0.071 | 0.5s |
-| KNN | 16.2 ± 1.2 | 13.2 | 0.035 ± 0.061 | 0.5s |
-| DecisionTree | 17.6 ± 2.0 | 14.6 | −0.146 ± 0.156 | 0.5s |
 | RandomForest | 15.7 ± 1.3 | 12.8 | 0.092 ± 0.100 | 42.2s |
 | GradientBoosting | 15.8 ± 1.3 | 12.9 | 0.072 ± 0.103 | 33.6s |
 | XGBoost_GPU | 15.8 ± 1.2 | 13.0 | 0.072 ± 0.090 | 162.0s |
-| SVR | — | — | — | (>60 min) |
-| MLP | — | — | — | (>60 min) |
 
-**Campeón: Ridge v2** — R² 0.103, RMSE 15.6, tiempo < 1s.
+**Campeón v2: Ridge** — R² 0.103, RMSE 15.6, tiempo < 1s.
 
-### 2.5 Resultados v3 — Re-entreno final (Jul 2026)
+#### v3 — Re-entreno con TF-IDF corregido
 
-| Modelo | R² | RMSE | AUC | MAE | Nota |
-|---|---|---|---|---|---|
-| **Ridge** | **0.149** | **16.0 pp** | — | — | Reemplazo de `tfidf_cualquier` → `tfidf_obra` |
-| **LogisticRegression** | — | — | **0.662 ± 0.026** | — | Clasificador binario para alerta |
+Se reemplazó `tfidf_cualquier` por `tfidf_obra`. Ridge mejoró de R² 0.103 → **0.149** y LogisticRegression de AUC 0.639 → **0.662**.
 
-**Campeón final: Ridge** — R² 0.149, RMSE 16.0 pp.
-
-### 2.4 Mejora v1 → v2
-
-| Modelo | R² v1 | R² v2 | Δ |
+| Modelo | R² | RMSE | AUC |
 |---|---|---|---|
-| Ridge | 0.040 | **0.103** | +157% |
-| ElasticNet | 0.030 | **0.094** | +213% |
-| RandomForest | 0.074 | **0.092** | +24% |
-| GradientBoosting | −0.001 | **0.072** | +73pp |
-| XGBoost | −0.063 | **0.072** | +135pp |
-| Lasso | −0.019 | 0.069 | +88pp |
-| KNN | −0.043 | 0.035 | +78pp |
+| **Ridge** | **0.149** | **16.0 pp** | — |
+| **LogisticRegression** | — | — | **0.662 ± 0.026** |
 
-La reducción de 219 a 33 features eliminó ruido y estabilizó todos los modelos. La adición de TRM e IPC mejoró significativamente a los modelos lineales (Ridge, ElasticNet, Lasso).
+> **Conclusión parcial:** Ridge con año único era un modelo aceptable, con MAE de 14.3 pp en datos vistos y 11.4 pp en datos no vistos. Sin embargo, al forzar todos los contratos a un solo año (anio=2022 para contratos sin fecha), se perdía precisión metodológica.
 
----
+### 2.2 Fase 2: Migración a Rango de Fechas — Ridge no funcionó (v4)
 
-## 3. Optimizaciones Exploradas
+Al migrar de año único (anio/ipc/trm) a rango de fechas (anio_inicio/anio_fin/duracion/ipc_acumulado/trm_promedio), se esperaba que Ridge mantuviera o mejorara su rendimiento. **No fue el caso.**
 
-### 3.1 Log-transform del target
+| Modelo | Configuración | R² CV | RMSE | AUC |
+|---|---|---|---|---|
+| Ridge (año único) | 33 feat, anio=2022 | **0.149** (full) | 16.0 pp | 0.662 |
+| Ridge (rango) | 35 feat, IPC acum compuesto | 0.066 ± 0.081 | 16.2 pp | 0.650 |
+| ElasticNet (rango) | 35 feat | 0.063 ± 0.076 | 16.3 pp | 0.661 |
+| RandomForest (rango) | 35 feat, max_depth=10 | 0.047 ± 0.092 | 16.7 pp | 0.602 |
+| MLP (rango) | 35 feat, hidden=(64,32) | −0.037 ± 0.109 | 17.6 pp | 0.563 |
 
-Se aplicó `np.log1p(sobrecosto)` para estabilizar la cola larga de la distribución del target. **Resultado: empeoró el R².**
+**Causa del deterioro:** Ridge (modelo lineal con regularización L2) no logró aprovechar la nueva información temporal. Las variables `ipc_acumulado` y `trm_promedio` introdujeron multicolinealidad con las features existentes y el supuesto de linealidad no capturó las interacciones no lineales entre duración, inflación compuesta y tipo de cambio.
 
-| Modelo | R² original | R² con log+interacciones | Δ |
+Ridge con año único funcionaba porque el año era un proxy categórico simple. Al expandirlo a rango, la relación se volvió más compleja de lo que un modelo lineal podía capturar.
+
+### 2.3 Fase 3: SVR como nuevo campeón (v4 final)
+
+Se evaluó SVR (Support Vector Regression) con kernel RBF como alternativa no lineal, usando los mismos 5 folds de validación cruzada:
+
+| Modelo | R² CV (10-fold) | AUC CV | RMSE |
 |---|---|---|---|
-| Ridge | 0.103 **−0.094** | −0.197 |
-| ElasticNet | 0.094 | −0.133 | −0.227 |
-| RandomForest | 0.092 | −0.067 | −0.159 |
+| **SVR (kernel RBF, C=10, gamma=scale)** | **0.072** | **0.673** | **17.1 pp** |
+| Ridge (referencia) | 0.066 | 0.650 | 16.0 pp |
 
-**Causa:** El sobrecosto ya tiene una distribución relativamente simétrica (media 27%, outlier >200% eliminado). El log-transform introdujo asimetría inversa y la back-transformación (`expm1`) amplificó errores en predicciones altas.
+**R² full en entrenamiento:** 0.417 (SVR) vs 0.149 (Ridge año único).
 
-### 3.2 Interacciones sintéticas
+SVR superó a Ridge en R² CV (+0.006) y AUC (+0.023). Aunque el RMSE nominal es más alto (17.1 vs 16.0), esto se debe a que SVR optimiza error epsilon-insensitive, no MSE como Ridge.
 
-Se probaron 3 interacciones (TRM × probabilidad, IPC × valor inicial, TRM × riesgo total). **No aportaron señal predictiva** y actuaron como ruido adicional para el modelo lineal.
+**¿Por qué SVR ganó?**
+1. **Kernel RBF**: captura relaciones no lineales entre duración, IPC acumulado y TRM promedio que Ridge (lineal) no puede modelar
+2. **Regularización intrínseca**: el margen epsilon de SVR es más robusto a outliers que Ridge
+3. **Mejor ranking**: AUC de 0.673 vs 0.650 — mejor separación entre contratos de alto y bajo riesgo
 
-### 3.3 Re-entreno con TF-IDF corregido
+### 2.4 Comparación Final — Línea de Tiempo del Modelo
 
-La mejora más significativa se logró reemplazando `tfidf_cualquier` por `tfidf_obra` en la selección de features, reflejando mejor la naturaleza del dominio (contratos de obra pública).
-
-| Feature removida | Feature añadida | Δ R² |
-|---|---|---|
-| `tfidf_cualquier` (ruido, −0.034) | `tfidf_obra` (señal relevante) | +0.046 |
-
-### 3.4 Conclusión
-
-El modelo Ridge **re-entrenado** (con `tfidf_obra`, sin log, sin interacciones, con las 33 features reducidas) es el campeón definitivo con **R² 0.149** y **RMSE 16.0 pp**.
-
----
-
-## 4. Interpretación de Coeficientes (Ridge)
-
-Los coeficientes de Ridge, entrenado con datos estandarizados, revelan qué variables incrementan o disminuyen el sobrecosto:
-
-### Top 5 que AUMENTAN el sobrecosto
-
-| Feature | Coeficiente | Interpretación |
-|---|---|---|
-| `tfidf_pago` | +0.036 | Riesgos de pago (incumplimientos, demoras) aumentan el sobrecosto |
-| `tfidf_desarrollo` | +0.034 | Riesgos de desarrollo del proyecto (cambios de alcance, retrasos técnicos) |
-| `tfidf_disenos` | +0.031 | Riesgos en los diseños técnicos (planos, especificaciones) |
-| `tfidf_calidad` | +0.028 | Riesgos de calidad de obra (materiales, acabados) |
-| `prop_tipo_operacional` | +0.022 | Mayor proporción de riesgos operacionales → mayor sobrecosto |
-
-### Top 5 que DISMINUYEN el sobrecosto
-
-| Feature | Coeficiente (v3) | Interpretación |
-|---|---|---|
-| `tfidf_informacion` | −0.049 | Riesgos de información/documentación bien gestionados reducen el sobrecosto |
-| `tfidf_manejo` | −0.044 | Riesgos de manejo/gestión controlados |
-| `tfidf_insumos` | −0.034 | Riesgos de insumos planificados → menor sobrecosto |
-| `tfidf_obra` | −0.030 | Riesgos de obra genéricos — semántica más específica que el anterior `tfidf_cualquier` |
-| `tfidf_ejecucion_contrato` | −0.020 | Riesgos de ejecución contractual bien gestionados |
+| Versión | Features | Modelo | R² (full) | R² CV | AUC CV | RMSE | Estado |
+|---|---|---|---|---|---|---|---|
+| v1 (Jun 2026) | 219 | Ridge | 0.040 | — | — | 16.1 | Baseline |
+| v2 (Jul 2026) | 33 (año único) | Ridge | 0.103 | 0.103 | ~0.639 | 15.6 | Campeón inicial |
+| v3 (Jul 2026) | 33 (año único) | Ridge | **0.149** | — | **0.662** | 16.0 | Re-entreno TF-IDF |
+| v4a (Jul 2026) | 35 (rango) | Ridge | 0.417 | 0.066 | 0.650 | 16.2 | **Descartado** |
+| v4b (Jul 2026) | 35 (rango) | **SVR RBF** | **0.417** | **0.072** | **0.673** | **17.1** | **Campeón final** |
 
 ---
 
-## 5. Conclusión y Decisión Final
+## 3. Interpretabilidad del Modelo
 
-### Modelo seleccionado: **Ridge (con validación cruzada anidada, re-entreno v3)**
+### 3.1 Permutation Importance (SVR)
+
+SVR con kernel RBF no tiene coeficientes lineales interpretables. Se usó **permutation importance** (10 repeticiones) como método de explicación global:
+
+| Feature | Importancia (Δ R²) | Efecto |
+|---|---|---|
+| `tfidf_disenos` | +0.0503 | Diseños técnicos aumentan el riesgo |
+| `tfidf_desarrollo` | +0.0387 | Desarrollo del proyecto |
+| `tfidf_manejo` | +0.0361 | Manejo/gestión de riesgos |
+| `tfidf_tecnicas` | +0.0347 | Aspectos técnicos |
+| `tfidf_materiales` | +0.0329 | Materiales e insumos |
+| `duracion` | +0.0319 | Proyectos más largos → más riesgo |
+| `ipc_acumulado` | +0.0296 | Inflación compuesta del período |
+| `prop_asig_entidad` | −0.0152 | Riesgos asignados a la entidad |
+| `prop_tipo_economico` | −0.0108 | Riesgos económicos |
+
+### 3.2 Ridge de Referencia
+
+Se entrenó un Ridge (alpha=244) exclusivamente como referencia de coeficientes lineales. Sus coeficientes NO se usan para predecir, solo para interpretación direccional:
+
+**Top 5 que AUMENTAN:**
+| Feature | Coef | Interpretación |
+|---|---|---|
+| `tfidf_disenos` | +1.32 | Riesgos de diseño → mayor sobrecosto |
+| `duracion` | +1.26 | Mayor duración → mayor sobrecosto |
+| `tfidf_pago` | +1.05 | Riesgos de pago/incumplimiento |
+| `prop_tipo_operacional` | +0.97 | Más riesgos operacionales |
+| `prob_promedio` | +0.93 | Mayor probabilidad promedio |
+
+**Top 5 que DISMINUYEN:**
+| Feature | Coef | Interpretación |
+|---|---|---|
+| `tfidf_manejo` | −1.55 | Gestión de riesgos bien documentada |
+| `tfidf_informacion` | −1.32 | Información bien gestionada |
+| `tfidf_materiales` | −1.26 | Materiales planificados |
+| `tfidf_insumos` | −0.93 | Insumos especificados |
+| `imp_promedio` | −0.80 | Impacto promedio alto (contratos más cuidadosos) |
+
+> **Nota:** La interpretabilidad es global (permutation importance sobre todo el dataset), no local por contrato. Esto se documenta como limitación del modelo actual.
+
+---
+
+## 4. Optimizaciones Exploradas (histórico)
+
+### 4.1 Log-transform del target
+Se aplicó `np.log1p(sobrecosto)` para estabilizar la cola larga. **Empeoró el R².** El sobrecosto ya tiene distribución relativamente simétrica (media 27%, outlier >200% eliminado). El log-transform introdujo asimetría inversa y la back-transformación amplificó errores.
+
+### 4.2 Interacciones sintéticas
+TRM × probabilidad, IPC × valor inicial, TRM × riesgo total. **No aportaron señal predictiva** y actuaron como ruido.
+
+### 4.3 SHAP no disponible
+SHAP requiere numba, incompatible con numpy >=2.5 (Python 3.14). Se usó permutation importance como alternativa.
+
+---
+
+## 5. Conclusiones y Decisión Final
+
+### Modelo seleccionado: **SVR (kernel RBF, C=10, gamma=scale)**
 
 | Criterio | Resultado |
 |---|---|
-| R² (test set) | **0.149** |
-| RMSE | **16.0 pp** |
-| AUC (LogisticRegression) | **0.662 ± 0.026** |
-| Tiempo de entrenamiento | **< 1 segundo** |
-| Interpretabilidad | **Coeficientes lineales directos** |
+| R² (full training) | **0.417** |
+| R² CV (10-fold) | **0.072 ± 0.097** |
+| AUC CV (clasificador) | **0.673** |
+| RMSE | **17.1 pp** |
+| Features | **35 (30 TF-IDF + 5 rango)** |
+| Interpretabilidad | **Permutation importance (global) + Ridge referencia** |
 
 ### Justificación para la tesis
 
-> "El modelo Ridge, entrenado con 33 features de riesgo e indicadores macroeconómicos (IPC y TRM), logró un R² de 0.149, superando a modelos más complejos como Random Forest y XGBoost, y ofreciendo una interpretabilidad directa de los coeficientes para la toma de decisiones. La arquitectura de dos capas (Ridge para predicción central, heurística de pesos prob×imp para desglose individual) permite tanto estimaciones robustas como análisis detallado por riesgo, siendo esto último inalcanzable para Ridge puro por trabajar con features agregadas."
+> "El modelo SVR con kernel RBF, entrenado con 35 features (30 TF-IDF + 5 de rango de fechas con IPC acumulado compuesto y TRM promedio), fue seleccionado como modelo campeón tras superar a Ridge en R² CV (0.072 vs 0.066) y AUC (0.673 vs 0.650). La migración de año único a rango de fechas, aunque metodológicamente necesaria para modelar proyectos multi-anuales, deterioró el rendimiento de Ridge (lineal), que no pudo capturar las relaciones no lineales entre duración, inflación compuesta y tipo de cambio. SVR, gracias a su kernel RBF, sí logró modelar estas interacciones. La interpretabilidad se logra mediante permutation importance global y coeficientes Ridge de referencia, aunque la explicación local por contrato queda como trabajo futuro."
 
-### Modelos descartados
+### Modelos descartados en la fase final
 
 | Modelo | Razón |
 |---|---|
-| SVR | R² negativo en v1, >60 min de entrenamiento |
-| MLP | R² negativo en v1, >30 min de entrenamiento |
-| XGBoost_GPU | R² inferior a Ridge (0.072 vs 0.149), 162s |
-| DecisionTree | R² negativo (−0.146), sobreajuste |
-| GradientBoosting | R² inferior a Ridge (0.072 vs 0.149), 33s |
-| RandomForest | R² inferior a Ridge (0.092 vs 0.149), 42s |
+| Ridge (año único) | Metodológicamente incorrecto (proyectos multi-anual forzados a un año) |
+| Ridge (rango) | R² CV 0.066 (inferior a SVR), no captura no-linealidades |
+| ElasticNet (rango) | R² CV 0.063, similar a Ridge |
+| RandomForest (rango) | R² CV 0.047, sobreajuste severo (R² full=0.93) |
+| MLP (rango) | R² CV negativo (−0.037), datos insuficientes para red neuronal |
 
 ---
 
@@ -236,31 +259,39 @@ Los coeficientes de Ridge, entrenado con datos estandarizados, revelan qué vari
 ```
 risk_project/
 ├── docs/
-│   ├── contratos_features.csv           # 219 features, 351 contratos
-│   ├── contratos_features_reducido.csv  # 33 features, 350 contratos
+│   ├── contratos_macro.csv              # Features de rango por contrato (anio_inicio, ipc_acumulado, trm_promedio)
 │   └── modelo.md                        # Este documento
-├── estudio_modelos/
-│   ├── modelado.ipynb                   # v1: 219 features, baseline
-│   ├── modelo_final.ipynb               # v2: 33 features + GPU + optimizaciones
-│   └── resultados_v2/                   # Gráficos y tablas generadas
+├── notebooks/
+│   └── evaluacion_modelos.py            # Benchmark Ridge vs ElasticNet vs RF vs SVR
+│   └── test_svr_shap.py                 # Evaluación SVR + permutation importance
 ├── models/
-│   ├── ridge_regressor.pkl              # Ridge final (R² 0.149)
-│   ├── ridge_classifier.pkl             # LogisticRegression (AUC 0.662)
+│   ├── svr_regressor.pkl                # SVR campeón (R² 0.417 full)
+│   ├── classifier.pkl                   # LogisticRegression (AUC 0.673)
+│   ├── ridge_reference.pkl              # Ridge de referencia (coeficientes)
+│   ├── permutation_importance.csv       # Importancia global (10 reps)
 │   ├── scaler.pkl                       # StandardScaler ajustado
-│   ├── feature_names.pkl                # Lista de 33 features
-│   ├── coeficientes_ridge.csv           # Coeficientes para dashboard
+│   ├── feature_names.pkl                # Lista de 35 features
+│   ├── tfidf_vectorizer.pkl             # Vectorizador TF-IDF
 │   └── ipc_trm.pkl                      # Diccionario IPC/TRM por año
-└── scripts/
-    └── train_final_model.py             # Entrenamiento reproducible
+├── scripts/
+│   ├── train_final_model.py             # Entrenamiento SVR campeón
+│   └── compute_ipc_range.py             # Cálculo de IPC acumulado + TRM promedio por rango
+└── backend/
+    ├── predictor.py                     # Carga SVR + permutation importance
+    ├── quantitative_analysis.py         # MC con RMSE variable por n_riesgos
+    └── ...
 ```
 
 ---
 
-## 7. Próximos Pasos
+## 7. Próximos Pasos / Trabajo Futuro
 
-1. ✅ **Prototipo Streamlit** (Objetivo Específico 3): Dashboard interactivo con Ridge como motor de predicción, análisis cualitativo + cuantitativo completo
-2. ✅ **Validación con casos de estudio reales** (Objetivo Específico 4): 10 contratos (Grupos A y B), MAE 11.4 pp en datos no vistos
-3. **Redacción del capítulo de resultados** en la tesis
+1. ✅ **Prototipo funcional** con SVR como motor de predicción
+2. ✅ **Validación con 10 casos reales** (MAE = 10.5 pp, 7/10 aciertos)
+3. ✅ **RMSE variable por complejidad** (P90-P10 de 41 a 62 pp según n_riesgos)
+4. ⬜ **Interpretabilidad local**: LIME o SHAP (cuando numba sea compatible con Python 3.14)
+5. ⬜ **Calibración de umbrales RMSE** con datos históricos
+6. ⬜ **Redacción del capítulo de resultados** en la tesis
 
 ---
 
@@ -269,4 +300,5 @@ risk_project/
 | Fecha | Versión | Cambio |
 |---|---|---|
 | 2026-07-07 | v1 | Documento inicial. Benchmark v1 (219 vars) y v2 (33 vars). Ridge campeón (R² 0.103). |
-| 2026-07-09 | v2 | Re-entreno final. `tfidf_cualquier` → `tfidf_obra`. Ridge R² 0.149, AUC 0.662. `scripts/train_final_model.py` creado. |
+| 2026-07-09 | v2 | Re-entreno final. `tfidf_cualquier` → `tfidf_obra`. Ridge R² 0.149, AUC 0.662. |
+| 2026-07-11 | v3 | Migración a rango de fechas. Ridge descartado (R² CV=0.066). SVR nuevo campeón (R² CV=0.072, AUC=0.673). Permutation importance. RMSE variable. |

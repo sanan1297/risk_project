@@ -25,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-RANGO_ANOS = list(range(2000, 2026))
+RANGO_ANOS = list(range(2000, 2028))
 REQUIRED_COLS = ["id_contrato", "descripcion_riesgo", "probabilidad", "impacto", "tipo", "categoria"]
 
 
@@ -66,9 +66,10 @@ def _build_factor_info(coef_list: list[dict]) -> list[FactorInfo]:
 @app.post("/predict", response_model=list[PrediccionSalida])
 def predict(
     file: UploadFile | None = File(None),
-    anio: int | None = Form(None),
-    ipc: float | None = Form(None),
-    trm: float | None = Form(None),
+    anio_inicio: int | None = Form(None),
+    anio_fin: int | None = Form(None),
+    ipc_override: float | None = Form(None),
+    trm_override: float | None = Form(None),
     riesgos: str | None = Form(None),
 ):
     df = _parse_input(file, riesgos)
@@ -77,14 +78,14 @@ def predict(
     if errors:
         raise HTTPException(422, {"errores": errors, "columnas_requeridas": REQUIRED_COLS})
 
-    if anio is not None and (anio < 2000 or anio > 2025) and (ipc is None or trm is None):
-        raise HTTPException(400, f"Año {anio} fuera de rango (2000-2025). Debes proporcionar ipc y trm manualmente.")
+    if anio_inicio is not None and anio_inicio not in RANGO_ANOS:
+        raise HTTPException(400, f"Año inicio {anio_inicio} fuera de rango ({RANGO_ANOS[0]}-{RANGO_ANOS[-1]}).")
 
     if "id_contrato" not in df.columns:
         df["id_contrato"] = "CONTRATO_01"
 
     try:
-        df_feat = aggregate_risks(df, anio=anio, ipc=ipc, trm=trm)
+        df_feat = aggregate_risks(df, anio_inicio=anio_inicio, anio_fin=anio_fin, ipc_override=ipc_override, trm_override=trm_override)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -101,12 +102,16 @@ def predict(
         cid = result["contratos"][i]
         n_riesgos = result["n_riesgos"][i]
 
+        i_macro = df_feat.iloc[i]
         hid = history.guardar(
             id_contrato=cid,
             n_riesgos=n_riesgos,
-            anio=anio,
-            ipc=ipc,
-            trm=trm,
+            anio_inicio=anio_inicio,
+            anio_fin=anio_fin,
+            ipc_override=ipc_override,
+            trm_override=trm_override,
+            ipc_acumulado=i_macro.get("ipc_acumulado"),
+            trm_promedio=i_macro.get("trm_promedio"),
             prediccion_ridge=pred,
             probabilidad_alto_riesgo=result["probabilidades"][i],
             alerta=result["alertas"][i],
@@ -131,9 +136,10 @@ def predict(
 @app.post("/predict/montecarlo", response_model=MonteCarloSalida)
 def predict_montecarlo(
     file: UploadFile | None = File(None),
-    anio: int | None = Form(None),
-    ipc: float | None = Form(None),
-    trm: float | None = Form(None),
+    anio_inicio: int | None = Form(None),
+    anio_fin: int | None = Form(None),
+    ipc_override: float | None = Form(None),
+    trm_override: float | None = Form(None),
     riesgos: str | None = Form(None),
     n_iteraciones: int = Form(1000),
     incluir_ruido: bool = Form(True),
@@ -146,12 +152,9 @@ def predict_montecarlo(
     if errors:
         raise HTTPException(422, {"errores": errors, "columnas_requeridas": REQUIRED_COLS})
 
-    if anio is not None and (anio < 2000 or anio > 2025) and (ipc is None or trm is None):
-        raise HTTPException(400, f"Año {anio} fuera de rango (2000-2025). Debes proporcionar ipc y trm manualmente.")
-
     try:
         result = quantitative_analysis.compute(
-            df, anio=anio, ipc=ipc, trm=trm,
+            df, anio_inicio=anio_inicio, anio_fin=anio_fin, ipc_override=ipc_override, trm_override=trm_override,
             n_iteraciones=n_iteraciones, incluir_ruido=incluir_ruido,
             valor_inicial=valor_inicial,
         )
@@ -190,9 +193,14 @@ def get_history(page: int = 1, page_size: int = 20):
             created_at=r["created_at"],
             id_contrato=r["id_contrato"],
             n_riesgos=r["n_riesgos"],
-            anio=r["anio"],
-            ipc=r["ipc"],
-            trm=r["trm"],
+            anio=r.get("anio"),
+            ipc=r.get("ipc"),
+            trm=r.get("trm"),
+            anio_inicio=r.get("anio_inicio"),
+            anio_fin=r.get("anio_fin"),
+            duracion=r.get("duracion"),
+            ipc_acumulado=r.get("ipc_acumulado"),
+            trm_promedio=r.get("trm_promedio"),
             prediccion_ridge=r["prediccion_ridge"],
             probabilidad_alto_riesgo=r["probabilidad_alto_riesgo"],
             alerta=r["alerta"],

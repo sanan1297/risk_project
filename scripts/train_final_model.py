@@ -3,10 +3,13 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import RidgeCV, LogisticRegression
+from sklearn.svm import SVR
+from sklearn.linear_model import Ridge, LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, cross_val_predict
+from sklearn.metrics import r2_score, roc_auc_score
+from sklearn.inspection import permutation_importance
 
 import sys
 sys.path.insert(0, str(Path.cwd()))
@@ -32,6 +35,7 @@ IPC_TRM = {
     2020: {"ipc": 1.61, "trm": 3693.36}, 2021: {"ipc": 5.62, "trm": 3743.09},
     2022: {"ipc": 13.12, "trm": 4255.44}, 2023: {"ipc": 9.28, "trm": 4325.05},
     2024: {"ipc": 5.20, "trm": 4071.28}, 2025: {"ipc": 5.10, "trm": 4052.86},
+    2026: {"ipc": 6.40, "trm": 4200}, 2027: {"ipc": 4.80, "trm": 4100},
 }
 
 TOP_30_FEATURES = [
@@ -46,44 +50,74 @@ TOP_30_FEATURES = [
     "prop_asig_entidad", "tfidf_falta",
 ]
 
-CONTROL_VARS = ["anio", "ipc", "trm"]
-FEATURES_33 = TOP_30_FEATURES + CONTROL_VARS
+CONTROL_VARS_RANGO = ["anio_inicio", "anio_fin", "duracion", "ipc_acumulado", "trm_promedio"]
+FEATURES_35 = TOP_30_FEATURES + CONTROL_VARS_RANGO
 
 
-def add_ipc_trm(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    df["anio"] = df.get("anio", 2022)
-    df["ipc"] = df["anio"].map(lambda y: IPC_TRM.get(int(y), {"ipc": 0})["ipc"])
-    df["trm"] = df["anio"].map(lambda y: IPC_TRM.get(int(y), {"trm": 0})["trm"])
+def compute_range_features(anio_inicio: int, anio_fin: int, max_duracion: int = 5) -> dict:
+    if anio_fin < anio_inicio:
+        anio_fin = anio_inicio
+    duracion = anio_fin - anio_inicio
+    if duracion > max_duracion:
+        anio_fin = anio_inicio + max_duracion
+        duracion = max_duracion
+    ipc_acum = 1.0
+    trm_vals = []
+    for y in range(anio_inicio, anio_fin + 1):
+        d = IPC_TRM.get(y, {"ipc": 3.0, "trm": 4000})
+        ipc_acum *= (1 + d["ipc"] / 100)
+        trm_vals.append(d["trm"])
+    ipc_acum = (ipc_acum - 1) * 100
+    trm_prom = float(np.mean(trm_vals))
+    return {
+        "anio_inicio": anio_inicio,
+        "anio_fin": anio_fin,
+        "duracion": duracion,
+        "ipc_acumulado": round(ipc_acum, 2),
+        "trm_promedio": round(trm_prom, 2),
+    }
+
+
+def add_macro_features(df: pd.DataFrame, macro_df: pd.DataFrame) -> pd.DataFrame:
+    df = df.merge(macro_df, on="id_contrato", how="left")
+    for c in CONTROL_VARS_RANGO:
+        if c not in df.columns:
+            fallback = compute_range_features(2022, 2022)
+            df[c] = fallback[c]
     return df
 
 
 def main() -> None:
     print("=" * 55)
-    print("  ENTRENAMIENTO FINAL — Ridge + LogisticRegression")
+    print("  ENTRENAMIENTO FINAL — SVR (kernel RBF)")
+    print("  Features: 35 (30 TF-IDF + 5 rango de fechas)")
     print("=" * 55)
 
     print("\n1. Cargando matriz_clean.csv...")
     matriz = pd.read_csv(DATA_DIR / "matriz_clean.csv", encoding="utf-8-sig")
     print(f"   Riesgos: {len(matriz):,} | Contratos: {matriz['id_contrato'].nunique()}")
 
-    print("\n2. Feature engineering...")
+    print("\n2. Cargando features de rango macro...")
+    macro = pd.read_csv(DATA_DIR / "contratos_macro.csv")
+    print(f"   {len(macro)} contratos con ipc_acumulado + trm_promedio")
+
+    print("\n3. Feature engineering...")
     df_feat = engineer_features(matriz)
-    df_feat = add_ipc_trm(df_feat)
+    df_feat = add_macro_features(df_feat, macro)
     n_antes = len(df_feat)
     df_feat = df_feat[df_feat["sobrecosto"] < 200].copy()
     print(f"   Features: {df_feat.shape[1]} | Contratos: {len(df_feat)} (outliers: {n_antes - len(df_feat)})")
 
-    missing = [c for c in FEATURES_33 if c not in df_feat.columns]
+    missing = [c for c in FEATURES_35 if c not in df_feat.columns]
     if missing:
         print(f"   ERROR: Faltan columnas: {missing}")
         return
 
-    X = df_feat[FEATURES_33].values
+    X = df_feat[FEATURES_35].values
     y = df_feat["sobrecosto"].values
     y_bin = (y > 25).astype(int)
 
-    print("\n3. Guardando vectorizador TF-IDF...")
+    print("\n4. Guardando vectorizador TF-IDF...")
     vectorizer = TfidfVectorizer(max_features=100, stop_words=STOP_WORDS, ngram_range=(1, 2))
     textos = matriz.groupby("id_contrato")["descripcion_riesgo"].apply(
         lambda g: " ".join(g.dropna().astype(str))
@@ -91,44 +125,61 @@ def main() -> None:
     vectorizer.fit(textos)
     print(f"   {len(vectorizer.get_feature_names_out())} tokens")
 
-    print("\n4. Escalando features...")
+    print("\n5. Escalando features...")
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    print("\n5. Entrenando Ridge (regresion)...")
-    ridge = RidgeCV(alphas=np.logspace(-3, 3, 50), scoring="neg_root_mean_squared_error")
-    ridge.fit(X_scaled, y)
-    r2 = ridge.score(X_scaled, y)
-    cv_r2 = cross_val_score(ridge, X_scaled, y, cv=5, scoring="r2")
-    print(f"   Alpha: {ridge.alpha_:.4f} | R² full: {r2:.4f} | R² CV: {cv_r2.mean():.3f} ± {cv_r2.std():.3f}")
+    print("\n6. Entrenando modelo campeon: SVR (kernel RBF)...")
+    svr = SVR(kernel="rbf", C=10, gamma="scale")
+    svr.fit(X_scaled, y)
+    y_pred = svr.predict(X_scaled)
+    r2_full = r2_score(y, y_pred)
+    cv_r2 = cross_val_score(svr, X_scaled, y, cv=5, scoring="r2")
+    print(f"   R² full: {r2_full:.4f} | R² CV: {cv_r2.mean():.4f} ± {cv_r2.std():.4f}")
 
-    print("\n6. Entrenando LogisticRegression (clasificacion)...")
+    print("\n7. Entrenando clasificador (LogisticRegression)...")
     classifier = LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced", random_state=42)
     classifier.fit(X_scaled, y_bin)
     cv_auc = cross_val_score(classifier, X_scaled, y_bin, cv=5, scoring="roc_auc")
-    print(f"   AUC CV: {cv_auc.mean():.3f} ± {cv_auc.std():.3f}")
+    print(f"   AUC CV: {cv_auc.mean():.4f} ± {cv_auc.std():.4f}")
 
-    print("\n7. Guardando artefactos...")
-    joblib.dump(ridge, MODELS_DIR / "ridge_regressor.pkl")
-    joblib.dump(classifier, MODELS_DIR / "ridge_classifier.pkl")
+    print("\n8. Permutation importance global (10 repeticiones)...")
+    imp = permutation_importance(svr, X_scaled, y, n_repeats=10, random_state=42, n_jobs=-1)
+    imp_df = pd.DataFrame({
+        "feature": FEATURES_35,
+        "importance": imp.importances_mean,
+        "std": imp.importances_std,
+    }).sort_values("importance", ascending=False)
+    imp_df.to_csv(MODELS_DIR / "permutation_importance.csv", index=False, encoding="utf-8-sig")
+
+    print("\n9. Ridge de referencia (para coefs interpretables)...")
+    ridge = Ridge(alpha=244.0, random_state=42)
+    ridge.fit(X_scaled, y)
+    ridge_coefs = pd.DataFrame({"feature": FEATURES_35, "coef": ridge.coef_})
+    ridge_coefs.to_csv(MODELS_DIR / "coeficientes_ridge.csv", index=False, encoding="utf-8-sig")
+
+    print("\n10. Guardando artefactos...")
+    joblib.dump(svr, MODELS_DIR / "svr_regressor.pkl")
+    joblib.dump(classifier, MODELS_DIR / "classifier.pkl")
     joblib.dump(scaler, MODELS_DIR / "scaler.pkl")
-    joblib.dump(FEATURES_33, MODELS_DIR / "feature_names.pkl")
+    joblib.dump(FEATURES_35, MODELS_DIR / "feature_names.pkl")
     joblib.dump(vectorizer, MODELS_DIR / "tfidf_vectorizer.pkl")
     joblib.dump(IPC_TRM, MODELS_DIR / "ipc_trm.pkl")
+    joblib.dump(ridge, MODELS_DIR / "ridge_reference.pkl")
 
     for f in sorted(MODELS_DIR.iterdir()):
         print(f"   {f.name}")
 
-    coefs = pd.DataFrame({"feature": FEATURES_33, "coef": ridge.coef_})
-    coefs.to_csv(MODELS_DIR / "coeficientes_ridge.csv", index=False, encoding="utf-8-sig")
+    print("\n11. Top features por permutation importance:")
+    for _, r in imp_df.head(10).iterrows():
+        print(f"   + {r['feature']:35s} {r['importance']:.4f} ± {r['std']:.4f}")
+    for _, r in imp_df.tail(5).iterrows():
+        print(f"   - {r['feature']:35s} {r['importance']:.4f} ± {r['std']:.4f}")
 
-    print("\n8. Top coeficientes:")
-    top = coefs.sort_values("coef", ascending=False)
-    for _, r in top.head(10).iterrows():
-        print(f"   + {r['feature']:30s} {r['coef']:.4f}")
-    for _, r in top.tail(10).iterrows():
-        print(f"   - {r['feature']:30s} {r['coef']:.4f}")
-
+    print(f"\n12. Resumen:")
+    print(f"   Regresion: SVR R² CV={cv_r2.mean():.4f} | AUC clasif CV={cv_auc.mean():.4f}")
+    print(f"   Modelo campeon: SVR (kernel RBF, C=10, gamma=scale)")
+    print(f"   Interpretabilidad: permutation importance (10 reps)")
     print("\nEntrenamiento completado.")
 
 

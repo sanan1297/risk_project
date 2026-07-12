@@ -25,6 +25,11 @@ def init():
             anio INTEGER,
             ipc REAL,
             trm REAL,
+            anio_inicio INTEGER,
+            anio_fin INTEGER,
+            duracion INTEGER,
+            ipc_acumulado REAL,
+            trm_promedio REAL,
             prediccion_ridge REAL NOT NULL,
             probabilidad_alto_riesgo REAL NOT NULL,
             alerta TEXT NOT NULL,
@@ -35,14 +40,11 @@ def init():
             mc_iteraciones INTEGER
         )
     """)
-    try:
-        conn.execute("ALTER TABLE predicciones ADD COLUMN mc_iteraciones INTEGER")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE predicciones ADD COLUMN resultado_json TEXT")
-    except sqlite3.OperationalError:
-        pass
+    for col in ["mc_iteraciones", "resultado_json", "anio_inicio", "anio_fin", "duracion", "ipc_acumulado", "trm_promedio"]:
+        try:
+            conn.execute(f"ALTER TABLE predicciones ADD COLUMN {col}")
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
 
@@ -50,26 +52,34 @@ def init():
 def guardar(
     id_contrato: str,
     n_riesgos: int,
-    anio: int | None,
-    ipc: float | None,
-    trm: float | None,
-    prediccion_ridge: float,
-    probabilidad_alto_riesgo: float,
-    alerta: str,
-    factores_aumentan: list[dict],
-    factores_disminuyen: list[dict],
+    anio_inicio: int | None = None,
+    anio_fin: int | None = None,
+    ipc_override: float | None = None,
+    trm_override: float | None = None,
+    ipc_acumulado: float | None = None,
+    trm_promedio: float | None = None,
+    anio: int | None = None,
+    ipc: float | None = None,
+    trm: float | None = None,
+    prediccion_ridge: float = 0,
+    probabilidad_alto_riesgo: float = 0,
+    alerta: str = "",
+    factores_aumentan: list[dict] | None = None,
+    factores_disminuyen: list[dict] | None = None,
     sobrecosto_real: float | None = None,
     notas: str | None = None,
     mc_iteraciones: int | None = None,
 ) -> int:
     conn = _get_conn()
+    duracion = (anio_fin - anio_inicio) if (anio_inicio and anio_fin) else None
     cur = conn.execute(
         """INSERT INTO predicciones
         (created_at, id_contrato, n_riesgos, anio, ipc, trm,
+         anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio,
          prediccion_ridge, probabilidad_alto_riesgo, alerta,
          sobrecosto_real, notas, factores_aumentan, factores_disminuyen,
          mc_iteraciones)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             datetime.now().isoformat(),
             id_contrato,
@@ -77,13 +87,18 @@ def guardar(
             anio,
             ipc,
             trm,
+            anio_inicio,
+            anio_fin,
+            duracion,
+            ipc_acumulado,
+            trm_promedio,
             round(prediccion_ridge, 2),
             round(probabilidad_alto_riesgo, 4),
             alerta,
             sobrecosto_real,
             notas,
-            json.dumps(factores_aumentan, ensure_ascii=False),
-            json.dumps(factores_disminuyen, ensure_ascii=False),
+            json.dumps(factores_aumentan, ensure_ascii=False) if factores_aumentan else None,
+            json.dumps(factores_disminuyen, ensure_ascii=False) if factores_disminuyen else None,
             mc_iteraciones,
         ),
     )
