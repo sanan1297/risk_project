@@ -46,7 +46,7 @@ SECOP II API (jbjy-vk9h) ──┘
 |---|---|---|---|
 | 1 | Tipo de contrato | Solo **Obra** | `tipo_de_contrato = 'Obra'` en query API |
 | 2 | Destino del gasto | Solo **Inversión** | `destino_gasto = 'Inversión'` (SECOP I en query, SECOP II en post-filtro) |
-| 3 | Valor mínimo | ≥ **$500M COP** | `valor_inicial >= 500e6` |
+| 3 | Valor mínimo | ≥ **\$500M COP** | `valor_inicial >= 500e6` |
 | 4 | Estado | Solo **terminados/liquidados/cerrados** | `estado in ('Liquidado', 'terminado', 'Cerrado')` |
 | 5 | URL | Debe tener **URL válida** | `url` no nula ni vacía |
 | 6 | Entidad | Debe tener **nombre de entidad** | `entidad` no vacía |
@@ -87,7 +87,7 @@ sobrecosto_pct = ((valor_final - valor_inicial) / valor_inicial) × 100
 |---|---|---|---|---|
 | Descargados | 35,233 | 16,298 | 51,531 |
 | Inversión | 35,233 | 10,848 | 46,081 |
-| ≥ $500M | 5,500 | 3,446 | 8,946 |
+| ≥ \$500M | 5,500 | 3,446 | 8,946 |
 | Terminados | 5,500 | 3,446 | **8,946** |
 | Con URL | 5,500 | 3,446 | **8,946** |
 | Con entidad | 5,500 | 3,446 | **8,946** |
@@ -153,11 +153,11 @@ Sin embargo, al revisar `docs/matriz.csv` se encontraron **5 contratos** con est
 
 | Entidad | valor_inicial | valor_final | Sobrecosto |
 |---|---|---|---|
-| Caja de la Vivienda Popular (Grupo I) | $2,742M | $4,560M | +66.29% |
-| Municipio de Entrerríos | $242M | $271M | +11.85% |
-| ICBF Regional Tolima | $592M | $613M | +3.55% |
-| Fondo Adaptación | $19,872M | $20,273M | +2.02% |
-| Rama Judicial – Montería | $1,161M | $1,161M | +0.00% |
+| Caja de la Vivienda Popular (Grupo I) | \$2,742M | \$4,560M | +66.29% |
+| Municipio de Entrerríos | \$242M | \$271M | +11.85% |
+| ICBF Regional Tolima | \$592M | \$613M | +3.55% |
+| Fondo Adaptación | \$19,872M | \$20,273M | +2.02% |
+| Rama Judicial – Montería | \$1,161M | \$1,161M | +0.00% |
 
 Los 4 primeros tienen sobrecosto real positivo. Rama Judicial tiene sobrecosto ~0% (incluido como testigo). Nota: en `secop2_cache` el noticeUID `CO1.NTC.2222959` (Caja de la Vivienda Popular) tiene 2 sub-contratos (Grupo I y III); el Grupo III arroja sobrecosto negativo (-5.24%) y se excluye del conjunto.
 
