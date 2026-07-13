@@ -1,0 +1,63 @@
+digraph G {
+    rankdir=TB;
+    ordering=out;
+    newrank=true;
+    nodesep=0.3;
+    ranksep=0.35;
+    fontname=Arial;
+    node [shape=box, style="filled,rounded", fillcolor="#F8FAFC", fontname=Arial, fontsize=9];
+    edge [fontname=Arial, fontsize=8];
+
+    { rank=same; A; B; C; }
+    A [label="SECOP I API", fillcolor="#E0F2FE"];
+    B [label="unificar_secop.py"];
+    C [label="secop1_cache.csv"];
+    A -> B -> C [weight=100];
+    C -> D;
+
+    { rank=same; F; E; D; }
+    D [label="depurar.py"];
+    E [label="proyectos\ndepurados.csv"];
+    F [label="separar\nfuentes.py"];
+    F -> E [weight=100, constraint=false];
+    E -> D [weight=100, constraint=false];
+    D -> E [weight=1];
+    E -> F [weight=1];
+    F -> G;
+
+    { rank=same; G; H; I; }
+    G [label="excel_lite.py"];
+    H [label="proyectos\nsecop1_lite.csv\n1,560 contratos"];
+    I [label="Extracción\nMatrices\nPDF → LLM → CSV"];
+    G -> H -> I [weight=100];
+    I -> J;
+
+    { rank=same; L; K; J; }
+    J [label="matriz.csv\n6,525 riesgos"];
+    K [label="normalizar.py"];
+    L [label="matriz_clean.csv\n351 contratos"];
+    L -> K [weight=100, constraint=false];
+    K -> J [weight=100, constraint=false];
+    J -> K [weight=1];
+    K -> L [weight=1];
+    L -> M;
+
+    { rank=same; M; N; O; }
+    M [label="Feature\nEngineering\n219 → 35 features"];
+    N [label="SVR RBF + Logistic\nR² 0.417 · AUC 0.673"];
+    O [label="svr_regressor.pkl\npermutation_imp.csv"];
+    M -> N -> O [weight=100];
+    O -> P;
+
+    { rank=same; Q; P; }
+    P [label="FastAPI Backend\n/predict + /mc", fillcolor="#4facfe", fontcolor="white"];
+    Q [label="quantitative_analysis.py\nMC + Tornado", fillcolor="#6C5CE7", fontcolor="white"];
+    Q -> P [weight=100, constraint=false];
+    P -> Q [weight=1];
+    Q -> R;
+
+    { rank=same; R; S; }
+    R [label="Streamlit Frontend\nDashboard + Predicción\n+ Historial", fillcolor="#00B894", fontcolor="white"];
+    S [label="Usuario Final", fillcolor="#1ABC9C", fontcolor="white"];
+    R -> S [weight=100];
+}

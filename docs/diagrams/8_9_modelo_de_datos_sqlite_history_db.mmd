@@ -1,0 +1,21 @@
+erDiagram
+    predicciones {
+        INTEGER id PK
+        TEXT created_at
+        TEXT id_contrato
+        INTEGER n_riesgos
+        INTEGER anio_inicio
+        INTEGER anio_fin
+        INTEGER duracion
+        REAL ipc_acumulado
+        REAL trm_promedio
+        REAL prediccion_svr
+        REAL probabilidad_alto_riesgo
+        TEXT alerta
+        TEXT factores_aumentan "JSON"
+        TEXT factores_disminuyen "JSON"
+        REAL sobrecosto_real
+        TEXT notas
+        INTEGER mc_iteraciones
+        TEXT resultado_json "JSON completo del MC"
+    }

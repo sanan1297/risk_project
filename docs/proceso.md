@@ -282,37 +282,9 @@ Tesis/
 
 ### 8.1 Visión General
 
-```mermaid
-graph TB
-    subgraph Frontend["Frontend — Streamlit (frontend/streamlit_app.py)"]
-        DASH[Dashboard<br/>Uso del Modelo + Entrenamiento]
-        PRED[Predicción<br/>CSV / Texto + MC]
-        HIST[Historial<br/>Paginado + Ver completo]
-    end
+![Arquitectura del prototipo — Frontend (Streamlit), Backend (FastAPI), Datos estáticos y Almacenamiento dinámico](diagrams/8_1_visi_n_general.png)
 
-    subgraph Backend["Backend — FastAPI (backend/)"]
-        API[main.py<br/>REST API]
-        FE[feature_engineering.py<br/>Agregación de riesgos → 35 features]
-        PREDICT[predictor.py<br/>SVR RBF R² 0.417 + Logistic AUC 0.673]
-        QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
-        HISTDB[history.py<br/>SQLite CRUD + resultado_json MC]
-        TRAIN[training_stats.py<br/>351 contratos, R², coeficientes]
-        LABELS[feature_labels.py<br/>Labels legibles]
-    end
-
-    subgraph Data["Datos Estáticos"]
-        M[MODELOS<br/>svr_regressor.pkl<br/>classifier.pkl<br/>ridge_reference.pkl<br/>permutation_importance.csv<br/>scaler.pkl<br/>feature_names.pkl<br/>ipc_trm.pkl]
-        MAT[matriz_clean.csv<br/>6,525 riesgos<br/>351 contratos]
-    end
-
-    subgraph Storage["Almacenamiento Dinámico"]
-        DB[(history.db<br/>SQLite<br/>+ resultado_json)]
-    end
-
-    Frontend -->|HTTP :8003| Backend
-    Backend --> Data
-    Backend -->|lectura/escritura| Storage
-```
+*Arquitectura del prototipo — Frontend (Streamlit), Backend (FastAPI), Datos estáticos y Almacenamiento dinámico*
 
 ### 8.2 Backend API (`backend/`)
 
@@ -343,206 +315,39 @@ La app es single-page con navegación vía `?view=` en query params:
 
 ### 8.4 Flujo de Datos — Predicción
 
-```mermaid
-sequenceDiagram
-    participant U as Usuario
-    participant F as Streamlit
-    participant B as FastAPI
-    participant FE as feature_engineering
-    participant P as predictor
-    participant QA as quantitative_analysis
-    participant DB as history.db
+![Flujo de datos — Predicción: usuario sube CSV, Streamlit llama a la API, feature engineering + SVR + Monte Carlo, resultados en SQLite](diagrams/8_4_flujo_de_datos_predicci_n.png)
 
-    U->>F: Sube CSV o pega texto
-    F->>F: Valida + calcula n_riesgos
-    U->>F: Click "Procesar"
-    F->>F: 🌀 spinner (cualitativo)
-    F->>B: POST /predict (file + params)
-    B->>FE: aggregate_risks(df)
-    FE-->>B: features + id_contrato
-    B->>P: predict(features)
-    P-->>B: Ridge % + prob + alerta + factores
-    B->>DB: INSERT predicción
-    DB-->>B: history_id
-    B-->>F: PrediccionSalida (con history_id)
-    F-->>U: Cards con resultado + factores
-    Note over F: Análisis cualitativo listo
-
-    F->>F: 🌀 spinner (cuantitativo)
-    F->>B: POST /predict/montecarlo (file + params + history_id)
-    B->>FE: aggregate_risks(df)
-    B->>QA: compute(df_contrato, n_iteraciones, valor_inicial, ...)
-    QA->>QA: Monte Carlo: 1000 iteraciones, Δ∈{-1,0,+1} en prob/imp
-    QA->>QA: SVR predict en cada iteración + ruido Gaussiano N(0, RMSE_var) según n_riesgos
-    QA->>QA: Tornado por tipo: perturba todos ±1, mide swing
-    QA->>QA: Desglose por riesgo: peso = (prob_i × imp_i) / Σ(prob×imp)
-    QA-->>B: percentiles, stats, histograma, tornado, desglose
-    B->>DB: UPDATE mc_iteraciones + resultado_json
-    B-->>F: MonteCarloSalida (% y COP si hay valor_inicial)
-    F-->>U: Histograma + tabla tornado + desglose por riesgo
-```
+*Flujo de datos — Predicción: usuario sube CSV, Streamlit llama a la API, feature engineering + SVR + Monte Carlo, resultados en SQLite*
 
 ### 8.5 Flujo de Datos — Dashboard
 
-```mermaid
-sequenceDiagram
-    participant U as Usuario
-    participant F as Streamlit
-    participant B as FastAPI
-    participant DB as history.db
-    participant Files as CSVs + PKLs
+![Flujo de datos — Dashboard: consulta stats de usage y training desde la API](diagrams/8_5_flujo_de_datos_dashboard.png)
 
-    U->>F: Navega al Dashboard
-    F->>F: 🌀 spinner "Cargando estadísticas..."
-    F->>B: GET /stats/usage
-    B->>DB: SELECT COUNT, AVG, serie_temporal, alertas, top_factores, histograma_riesgos, predicciones_vs_reales, MC stats
-    DB-->>B: agregados
-    B-->>F: total_predicciones, %alto_riesgo, serie_temporal, top_factores, etc.
-    F->>F: Renderiza KPI cards + gráficos (evolución, alertas, factores, real vs predicho, MC)
-    F->>B: GET /stats/training
-    B->>Files: Lee matriz_clean.csv, permutation_importance.csv, ipc_trm.pkl
-    Files-->>B: datos
-    B-->>F: total_contratos=351, contratos_pool_secop1, top_coeficientes, distribución sobrecosto, categorías, tipos, IPC/TRM, dist_n_riesgos, top_riesgosos
-    F->>F: Renderiza KPI cards + tabla + bar chart + distribución
-    F-->>U: Dashboard completo
-```
+*Flujo de datos — Dashboard: consulta stats de usage y training desde la API*
 
 ### 8.6 Flujo de Datos — Historial
 
-```mermaid
-sequenceDiagram
-    participant U as Usuario
-    participant F as Streamlit
-    participant B as FastAPI
-    participant DB as history.db
+![Flujo de datos — Historial: paginación, vista completa, validación de sobrecosto real](diagrams/8_6_flujo_de_datos_historial.png)
 
-    U->>F: Navega al Historial
-    F->>F: 🌀 spinner "Cargando historial..."
-    F->>B: GET /history?page=1&page_size=15
-    B->>DB: SELECT con LIMIT/OFFSET
-    DB-->>B: 15 registros + COUNT total
-    B-->>F: {data: [...], total: N, pagina: 1, paginas: M}
-    F->>F: Renderiza 15 tarjetas
-    F-->>U: Lista paginada con navegación ◀/▶
-    
-    U->>F: Click "Siguiente ▶"
-    F->>F: hist_page += 1
-    F->>B: GET /history?page=2&page_size=15
-    B-->>F: {data: [...], total: N, pagina: 2}
-    F-->>U: Siguientes 15 registros
-
-    U->>F: Click "Ver análisis completo"
-    F->>B: GET /history/{id} (cualitativo + resultado_json)
-    B-->>F: Datos completos con MC si existe
-    F->>F: Render inline: histograma, tornado, desglose riesgos
-    F-->>U: Vista expandida con botón "Cerrar"
-    
-    U->>F: Ingresa sobrecosto real + "Guardar"
-    F->>B: PUT /history/{id} (form)
-    B->>DB: UPDATE
-    B-->>F: {status: "ok", id: N}
-    F-->>U: ✅ Guardado
-```
+*Flujo de datos — Historial: paginación, vista completa, validación de sobrecosto real*
 
 ### 8.7 Pipeline Completo
 
-```mermaid
-graph LR
-    A[SECOP I API] --> B[unificar_secop.py]
-    B --> C[secop1_cache.csv]
-    C --> D[depurar.py]
-    D --> E[proyectos_depurados.csv]
-    E --> F[separar_fuentes.py]
-    F --> G[proyectos_secop1.csv]
-    G --> H[excel_lite.py]
-    H --> I[proyectos_secop1_lite.csv<br/>1,560 contratos]
-    I --> J[Extracción Matrices<br/>PDF → LLM → CSV]
-    J --> K[matriz.csv<br/>6,525 riesgos]
-    K --> L[normalizar.py]
-    L --> M[matriz_clean.csv<br/>351 contratos]
-    M --> N["Feature Engineering<br/>219 features → 35 (30 TF-IDF + 5 rango)"]
-    N --> O["Modelo SVR RBF + Logistic<br/>R² 0.417 full · AUC 0.673<br/>350 contratos"]
-    O --> P[svr_regressor.pkl<br/>permutation_importance.csv]
-    P --> Q[FastAPI Backend<br/>/predict + /predict/montecarlo]
-    Q --> Q2[quantitative_analysis.py<br/>MC + Tornado + Desglose]
-    Q2 --> Q
-    Q --> R[Streamlit Frontend<br/>Dashboard + Predicción + Historial]
-    R --> S[Usuario Final]
-    
-    style Q fill:#4facfe,stroke:#333,color:white
-    style Q2 fill:#6C5CE7,stroke:#333,color:white
-    style R fill:#00B894,stroke:#333,color:white
-    style S fill:#1ABC9C,stroke:#333,color:white
-```
+![Pipeline completo: desde SECOP API hasta el frontend, pasando por extracción, feature engineering y modelo SVR](diagrams/8_7_pipeline_completo.png)
+
+*Pipeline completo: desde SECOP API hasta el frontend, pasando por extracción, feature engineering y modelo SVR*
 
 ### 8.8 Arquitectura del Sistema
 
-```mermaid
-graph TB
-    subgraph Browser["Navegador"]
-        ST[Streamlit App<br/>puerto 8501]
-    end
+![Arquitectura del sistema: navegador → Streamlit → FastAPI → módulos backend → archivos de datos](diagrams/8_8_arquitectura_del_sistema.png)
 
-    subgraph Server["Servidor Local"]
-        FA[FastAPI<br/>puerto 8000 → 8003<br/>zombie PID 12248]
-        
-        subgraph BackendMod["Módulos Backend"]
-            FE[feature_engineering.py]
-            PR[predictor.py]
-            QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
-            H[history.py<br/>SQLite CRUD + stats + resultados MC]
-            TS[training_stats.py]
-            FL[feature_labels.py]
-            SC[schemas.py]
-        end
-
-        subgraph DataFiles["Archivos de Datos"]
-            M1[models/svr_regressor.pkl]
-            M2[models/classifier.pkl]
-            M3[models/scaler.pkl]
-            M4[models/feature_names.pkl]
-            M5[models/ridge_reference.pkl]
-            M6[models/ipc_trm.pkl]
-            MD[docs/matriz_clean.csv]
-        end
-
-        subgraph Runtime["En Tiempo de Ejecución"]
-            DB[(history.db<br/>SQLite)]
-        end
-    end
-
-    Browser -->|HTTP :8501| ST
-    ST -->|HTTP :8003| FA
-    FA --> BackendMod
-    BackendMod --> DataFiles
-    BackendMod --> Runtime
-```
+*Arquitectura del sistema: navegador → Streamlit → FastAPI → módulos backend → archivos de datos*
 
 ### 8.9 Modelo de Datos — SQLite (`history.db`)
 
-```mermaid
-erDiagram
-    predicciones {
-        INTEGER id PK
-        TEXT created_at
-        TEXT id_contrato
-        INTEGER n_riesgos
-        INTEGER anio_inicio
-        INTEGER anio_fin
-        INTEGER duracion
-        REAL ipc_acumulado
-        REAL trm_promedio
-        REAL prediccion_svr
-        REAL probabilidad_alto_riesgo
-        TEXT alerta
-        TEXT factores_aumentan "JSON"
-        TEXT factores_disminuyen "JSON"
-        REAL sobrecosto_real
-        TEXT notas
-        INTEGER mc_iteraciones
-        TEXT resultado_json "JSON completo del MC"
-    }
-```
+![Modelo de datos ER — Tabla predicciones en SQLite con campos cualitativos y cuantitativos](diagrams/8_9_modelo_de_datos_sqlite_history_db.png)
+
+*Modelo de datos ER — Tabla predicciones en SQLite con campos cualitativos y cuantitativos*
 
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
@@ -654,7 +459,7 @@ risk_project/
 │   ├── matriz.csv                # Dataset original de matrices de riesgo
 │   └── matriz_clean.csv          # Versión normalizada (351 contratos, 6,525 riesgos)
 └── tests/
-    ├── plan_de_pruebas.md        # Plan y resultados de validación (Grupos A y B)
+    ├── plan_de_pruebas.md        # Plan y resultados de validación (Grupos A, B, C, D)
     └── data/                     # CSVs de prueba por contrato
 ```
 
@@ -662,14 +467,16 @@ risk_project/
 
 ### 11.1 Diseño de Pruebas
 
-Se diseñaron dos grupos de prueba para evaluar el modelo SVR de 35 features:
+Se diseñaron cuatro grupos de prueba para evaluar el modelo SVR de 35 features:
 
 | Grupo | Propósito | Contratos | Origen |
 |---|---|---|---|
 | **A (Sanidad)** | Verificar que el pipeline produce predicciones consistentes y las alertas clasifican correctamente | C-001, C-010, C-017, C-043, C-128 | Del mismo dataset (`matriz_clean.csv`), seleccionados manualmente para cubrir distintos perfiles de riesgo |
 | **B (Generalización)** | Evaluar capacidad del modelo con datos no vistos durante el entrenamiento | C-360 a C-364 | Proporcionados por el asesor como contratos reales de 2019-2023 con sobrecosto conocido |
+| **C (Predicción Futura)** | Proyectar sobrecosto de un contrato activo (no terminado) sin sobrecosto real conocido | C-365 | SECOP II: Puente Aranda / Troncal Calle 13, IDU Bogotá ($477.8B, 2023-2027) |
+| **D (Temporalidad)** | Medir sensibilidad del modelo al contexto macroeconómico manteniendo la matriz de riesgos constante | C-128 en 13 rangos (2010-2024) | Matriz de C-128 re-ejecutada con distintos años de inicio/fin |
 
-Metodología: cada contrato se cargó manualmente vía "Pegar texto" en el frontend, con los parámetros IPC/TRM correspondientes a su rango de fechas.
+Metodología: contratos de los Grupos A y B se cargaron manualmente vía "Pegar texto" en el frontend. Grupos C y D se ejecutaron automáticamente vía API con scripts de automatización.
 
 ### 11.2 Datos de Prueba
 
@@ -687,21 +494,22 @@ Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `
 | C-362 | 2021 | 2021 | \$1,878M | \$1,960M | 4.38% | — |
 | C-363 | 2022 | 2022 | \$1,869M | \$2,004M | 7.20% | — |
 | C-364 | 2023 | 2023 | \$1,869M | \$2,258M | 20.83% | — |
+| C-365 | 2023-2027* | — | \$477,835M | — | — | Activo — 25 riesgos. Proyectado: 2027-03-28 |
 
 ### 11.3 Resultados Grupo A — Prueba de Sanidad
 
 Modelo SVR con 35 features (30 TF-IDF + 5 rango: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio). R² full: 0.417, AUC: 0.673.
 
-| Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P90-P10 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| C-001 | 2018 | 2019 | 28.6% | 25.01% | −3.6 pp | 81.7% | ALTO RIESGO | 12 | 16 pp | 41.9 pp |
-| C-010 | 2018 | 2020 | 37.3% | 16.84% | −20.5 pp | 41.0% | RIESGO MODERADO | 20 | 16 pp | 40.7 pp |
-| C-017 | 2019 | 2022 | 53.1% | 33.16% | −19.9 pp | 91.7% | ALTO RIESGO | 18 | 16 pp | 40.9 pp |
-| C-043 | 2021 | 2022 | 2.2% | 28.54% | +26.3 pp | 80.7% | ALTO RIESGO | 22 | 20 pp | 51.7 pp |
-| C-128 | 2019 | 2021 | 30.4% | 26.31% | −4.1 pp | 66.9% | ALTO RIESGO | 15 | 16 pp | 41.3 pp |
+| Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C-001 | 2018 | 2019 | 28.6% | 25.01% | −3.6 pp | 81.7% | ALTO RIESGO | 12 | 16 pp | 2.5% | 23.6% | 45.2% | 42.7 pp |
+| C-010 | 2018 | 2020 | 37.3% | 16.84% | −20.5 pp | 41.0% | RIESGO MODERADO | 20 | 16 pp | −2.9% | 16.4% | 37.4% | 40.4 pp |
+| C-017 | 2019 | 2022 | 53.1% | 33.16% | −19.9 pp | 91.7% | ALTO RIESGO | 18 | 16 pp | 12.3% | 32.6% | 53.6% | 41.3 pp |
+| C-043 | 2021 | 2022 | 2.2% | 28.54% | +26.3 pp | 80.7% | ALTO RIESGO | 22 | 20 pp | 2.4% | 28.9% | 54.7% | 52.3 pp |
+| C-128 | 2019 | 2021 | 30.4% | 26.31% | −4.1 pp | 66.9% | ALTO RIESGO | 15 | 16 pp | 5.3% | 25.8% | 46.6% | 41.3 pp |
 
 **MAE:** 14.9 pp | **Aciertos:** 3/5  
-**Conclusión:** Tendencia a regresión a la media (C-010 subestimado, C-043 sobreestimado). La incertidumbre ahora varía según complejidad: C-043 (22 riesgos) tiene P90-P10 de 51.7 pp vs 41 pp de contratos más simples.
+**Conclusión:** Tendencia a regresión a la media (C-010 subestimado, C-043 sobreestimado). La incertidumbre ahora varía según complejidad: C-043 (22 riesgos) tiene P90-P10 de 52.3 pp vs ~41 pp de contratos más simples.
 
 ### 11.4 Validación contra Notebook (histórico)
 
@@ -709,17 +517,49 @@ El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El mo
 
 ### 11.5 Resultados Grupo B — Prueba de Generalización
 
-| Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P90-P10 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| C-360 | 2019 | 2019 | 10.14% | 15.55% | +5.4 pp | 21.4% | RIESGO MODERADO | 14 | 16 pp | 40.9 pp |
-| C-361 | 2022 | 2022 | 19.09% | 16.99% | −2.1 pp | 60.2% | ALTO RIESGO | 28 | 20 pp | 51.9 pp |
-| C-362 | 2021 | 2021 | 4.38% | 9.54% | +5.2 pp | 21.4% | RIESGO MODERADO | 27 | 20 pp | 50.5 pp |
-| C-363 | 2022 | 2022 | 7.20% | 15.13% | +7.9 pp | 36.8% | RIESGO MODERADO | 14 | 16 pp | 40.8 pp |
-| C-364 | 2023 | 2023 | 20.83% | 10.85% | −10.0 pp | 18.8% | RIESGO MODERADO | 34 | 24 pp | 62.1 pp |
+| Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C-360 | 2019 | 2019 | 10.14% | 15.55% | +5.4 pp | 21.4% | RIESGO MODERADO | 14 | 16 pp | −3.4% | 16.5% | 35.5% | 38.9 pp |
+| C-361 | 2022 | 2022 | 19.09% | 16.99% | −2.1 pp | 60.2% | ALTO RIESGO | 28 | 20 pp | −7.9% | 18.5% | 43.5% | 51.3 pp |
+| C-362 | 2021 | 2021 | 4.38% | 9.54% | +5.2 pp | 21.4% | RIESGO MODERADO | 27 | 20 pp | −15.9% | 10.5% | 35.0% | 50.9 pp |
+| C-363 | 2022 | 2022 | 7.20% | 15.13% | +7.9 pp | 36.8% | RIESGO MODERADO | 14 | 16 pp | −3.5% | 16.2% | 35.5% | 39.0 pp |
+| C-364 | 2023 | 2023 | 20.83% | 10.85% | −10.0 pp | 18.8% | RIESGO MODERADO | 34 | 24 pp | −19.8% | 12.0% | 45.5% | 65.4 pp |
 
 **MAE:** 6.1 pp (< 20 pp ✅) | **Aciertos:** 4/5  
 **Tiempo de respuesta:** < 2s por contrato (< 5s ✅)  
-**Conclusión:** El SVR generaliza muy bien en datos no vistos (MAE 6.1 pp). C-364 (34 riesgos) tiene el intervalo más amplio (P90-P10=62.1 pp) por su RMSE de 24 pp, reflejando correctamente su alta complejidad.
+**Conclusión:** El SVR generaliza muy bien en datos no vistos (MAE 6.1 pp). C-364 (34 riesgos) tiene el intervalo más amplio (P90-P10=65.4 pp) por su RMSE de 24 pp, reflejando correctamente su alta complejidad.
+
+### 11.6 Resultados Grupo C — Predicción a Futuro (C-365 Puente Aranda)
+
+Contrato activo de SECOP II (no terminado). Matriz de 25 riesgos del IDU Bogotá para la construcción de la intersección a desnivel de Puente Aranda (Troncal Calle 13). Valor: $477,834,784,322. Proyección: 2023-2027. Ejecutado el 2026-07-13 vía frontend.
+
+| Contrato | Inicio | Fin | SVR | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
+|----------|-------|-----|-----|-------|--------|---------|------|-----|-----|-----|---------|
+| C-365 | 2022 | 2024 | 27.52% | 77.2% | ALTO RIESGO | 25 | 20 pp | 2.53% | 27.63% | 54.01% | 51.48 pp |
+
+**Interpretación:** SVR = 27.5%, clasificado como ALTO RIESGO (77.2%). En COP: sobrecosto esperado de $131.5 mil M (P50), con rango P10-P90 de $12.1 mil M a $258 mil M. Los riesgos más influyentes son indemnizaciones a terceros, variación de precios (global), y daños a la obra.
+
+### 11.7 Resultados Grupo D — Sensibilidad Temporal (C-128 en 13 Rangos)
+
+Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 2010 a 2024 para medir el efecto del contexto macro (IPC, TRM). Automatizado vía API con script dedicado (13 llamadas a `/predict` + `/predict/montecarlo`).
+
+| ID | Inicio | Fin | SVR | Prob. | Alerta | RMSE | P10 | P50 | P90 | P90-P10 |
+|----|-------|-----|-----|-------|--------|------|-----|-----|-----|---------|
+| C-128-2010-2012 | 2010 | 2012 | 26.12% | 70.1% | ALTO RIESGO | 16 pp | 5.53% | 26.21% | 46.74% | 41.21 pp |
+| C-128-2011-2013 | 2011 | 2013 | 26.23% | 72.9% | ALTO RIESGO | 16 pp | 5.67% | 26.35% | 46.87% | 41.20 pp |
+| C-128-2012-2014 | 2012 | 2014 | 26.42% | 74.7% | ALTO RIESGO | 16 pp | 5.88% | 26.54% | 47.07% | 41.19 pp |
+| C-128-2013-2015 | 2013 | 2015 | 26.88% | 73.0% | ALTO RIESGO | 16 pp | 6.36% | 27.04% | 47.59% | 41.23 pp |
+| C-128-2014-2016 | 2014 | 2016 | 27.64% | 69.8% | ALTO RIESGO | 16 pp | 7.09% | 27.79% | 48.33% | 41.24 pp |
+| C-128-2015-2017 | 2015 | 2017 | 28.30% | 67.4% | ALTO RIESGO | 16 pp | 7.70% | 28.42% | 48.95% | 41.25 pp |
+| C-128-2016-2018 | 2016 | 2018 | 28.31% | 68.6% | ALTO RIESGO | 16 pp | 7.63% | 28.42% | 48.90% | 41.27 pp |
+| C-128-2017-2019 | 2017 | 2019 | 28.07% | 70.0% | ALTO RIESGO | 16 pp | 7.38% | 28.17% | 48.67% | 41.29 pp |
+| C-128-2018-2020 | 2018 | 2020 | 27.05% | 68.2% | ALTO RIESGO | 16 pp | 6.36% | 27.19% | 47.66% | 41.30 pp |
+| C-128-2019-2021 | 2019 | 2021 | 26.31% | 66.9% | ALTO RIESGO | 16 pp | 5.62% | 26.46% | 46.91% | 41.29 pp |
+| C-128-2020-2022 | 2020 | 2022 | 26.93% | 65.6% | ALTO RIESGO | 16 pp | 6.19% | 26.98% | 47.47% | 41.28 pp |
+| C-128-2021-2023 | 2021 | 2023 | 27.69% | 66.2% | ALTO RIESGO | 16 pp | 6.89% | 27.67% | 48.22% | 41.33 pp |
+| C-128-2022-2024 | 2022 | 2024 | 26.32% | 67.3% | ALTO RIESGO | 16 pp | 5.65% | 26.37% | 46.98% | 41.33 pp |
+
+**Hallazgo clave:** La predicción SVR varía solo **2.2 pp** (26.1%–28.3%) a pesar de 14 años de contexto macro distinto. El modelo depende más de la matriz de riesgos (TF-IDF + categorías) que de las features temporales (IPC acumulado, TRM). Pico en 2015-2017 (crisis fiscal), valle en 2010-2012. P90-P10 estable en ~41.2 pp para todos los rangos.
 
 ---
 
@@ -742,3 +582,7 @@ El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El mo
 | 2026-07-09 | Análisis cuantitativo: Monte Carlo (1000 iter, ruido σ=RMSE_var), tornado por tipo, desglose individual |
 | 2026-07-11 | Migración a rango de fechas (anio_inicio/anio_fin/ipc_acumulado/trm_promedio). Ridge no capturó no-linealidades (R² CV=0.066). **SVR RBF nuevo campeón** (R² CV=0.072, AUC=0.673). Permutation importance como interpretabilidad (SHAP incompatible con numba+numpy) |
 | 2026-07-11 | RMSE variable por n_riesgos (12/16/20/24 pp). Validación: MAE=10.5 pp, 7/10 aciertos |
+| 2026-07-13 | Descarga SECOP II activos: 7,422 contratos no terminados >= $1,000M + Obra + Inversión. Script: `buscar_activos_secop2.py` |
+| 2026-07-13 | **Grupo C**: C-365 Puente Aranda ($477.8B, activo). SVR=27.5%, ALTO RIESGO. Primer caso de predicción a futuro sin sobrecosto real |
+| 2026-07-13 | **Grupo D**: Prueba temporal C-128 en 13 rangos (2010-2024). Variación SVR=2.2 pp. La matriz de riesgos domina sobre features macro |
+| 2026-07-13 | Automatización de pruebas: script `run_c128_temporal.py` ejecuta 13 predicciones + MC vía API y guarda resultados en CSV |

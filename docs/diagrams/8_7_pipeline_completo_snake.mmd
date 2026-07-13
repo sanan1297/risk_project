@@ -1,0 +1,41 @@
+%% Snake pattern using subgraphs with direction RL for alternating rows
+graph TB
+    subgraph R1[" "]
+        direction LR
+        A[SECOP I API] --> B[unificar_secop.py] --> C[secop1_cache.csv]
+    end
+    C --> D[depurar.py]
+    subgraph R2[" "]
+        direction RL
+        D --> E[proyectos_depurados.csv] --> F[separar_fuentes.py]
+    end
+    F --> G[excel_lite.py]
+    subgraph R3[" "]
+        direction LR
+        G --> H[proyectos_secop1_lite.csv<br/>1,560 contratos] --> I[Extracción Matrices<br/>PDF → LLM → CSV]
+    end
+    I --> J[matriz.csv<br/>6,525 riesgos]
+    subgraph R4[" "]
+        direction RL
+        J --> K[normalizar.py] --> L[matriz_clean.csv<br/>351 contratos]
+    end
+    L --> M[Feature Engineering<br/>219 → 35 features]
+    subgraph R5[" "]
+        direction LR
+        M --> N[SVR RBF + Logistic<br/>R² 0.417 · AUC 0.673] --> O[svr_regressor.pkl<br/>permutation_importance.csv]
+    end
+    O --> P[FastAPI Backend<br/>/predict + /predict/montecarlo]
+    subgraph R6[" "]
+        direction RL
+        P --> Q[quantitative_analysis.py<br/>MC + Tornado + Desglose]
+    end
+    Q --> R[Streamlit Frontend<br/>Dashboard + Predicción + Historial]
+    subgraph R7[" "]
+        direction LR
+        R --> S[Usuario Final]
+    end
+
+    style P fill:#4facfe,stroke:#333,color:white
+    style Q fill:#6C5CE7,stroke:#333,color:white
+    style R fill:#00B894,stroke:#333,color:white
+    style S fill:#1ABC9C,stroke:#333,color:white

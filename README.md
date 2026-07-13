@@ -59,18 +59,18 @@ La incertidumbre del Monte Carlo ahora varía según la cantidad de riesgos del 
 
 **10 contratos de prueba — MAE global: 10.5 pp — Aciertos de alerta: 7/10**
 
-| Contrato | Real | SVR | Error | Alerta |
-|---|---|---|---|---|
-| C-001 | 28.6% | 25.01% | −3.6 | ALTO RIESGO ✅ |
-| C-010 | 37.3% | 16.84% | −20.5 | RIESGO MODERADO ❌ |
-| C-017 | 53.1% | 33.16% | −19.9 | ALTO RIESGO ✅ |
-| C-043 | 2.2% | 28.54% | +26.3 | ALTO RIESGO ❌ |
-| C-128 | 30.4% | 26.31% | −4.1 | ALTO RIESGO ✅ |
-| C-360 | 10.1% | 15.55% | +5.4 | RIESGO MODERADO ✅ |
-| C-361 | 19.1% | 16.99% | −2.1 | ALTO RIESGO ❌ |
-| C-362 | 4.4% | 9.54% | +5.2 | RIESGO MODERADO ✅ |
-| C-363 | 7.2% | 15.13% | +7.9 | RIESGO MODERADO ✅ |
-| C-364 | 20.8% | 10.85% | −10.0 | RIESGO MODERADO ✅ |
+| Contrato | Real | SVR | Error | P50 | P90-P10 | RMSE | Alerta |
+|---|---|---|---|---|---|---|---|---|
+| C-001 | 28.6% | 25.01% | −3.6 | 23.6% | 42.7 pp | 16 | ALTO RIESGO ✅ |
+| C-010 | 37.3% | 16.84% | −20.5 | 16.4% | 40.4 pp | 16 | RIESGO MODERADO ❌ |
+| C-017 | 53.1% | 33.16% | −19.9 | 32.6% | 41.3 pp | 16 | ALTO RIESGO ✅ |
+| C-043 | 2.2% | 28.54% | +26.3 | 28.9% | 52.3 pp | 20 | ALTO RIESGO ❌ |
+| C-128 | 30.4% | 26.31% | −4.1 | 25.8% | 41.3 pp | 16 | ALTO RIESGO ✅ |
+| C-360 | 10.1% | 15.55% | +5.4 | 16.5% | 38.9 pp | 16 | RIESGO MODERADO ✅ |
+| C-361 | 19.1% | 16.99% | −2.1 | 18.5% | 51.3 pp | 20 | ALTO RIESGO ❌ |
+| C-362 | 4.4% | 9.54% | +5.2 | 10.5% | 50.9 pp | 20 | RIESGO MODERADO ✅ |
+| C-363 | 7.2% | 15.13% | +7.9 | 16.2% | 39.0 pp | 16 | RIESGO MODERADO ✅ |
+| C-364 | 20.8% | 10.85% | −10.0 | 12.0% | 65.4 pp | 24 | RIESGO MODERADO ✅ |
 
 ## Arquitectura
 
@@ -110,8 +110,8 @@ risk_project/
 │   ├── matriz.csv                # Matrices de riesgo originales
 │   └── matriz_clean.csv          # 6,525 riesgos normalizados, 351 contratos
 ├── tests/
-│   ├── plan_de_pruebas.md        # Plan y resultados de validación
-│   └── data/                     # CSVs de prueba (Grupos A y B)
+│   ├── plan_de_pruebas.md        # Plan y resultados de validación (4 grupos: A-D)
+│   └── data/                     # CSVs de prueba (Grupos A, B, C, D)
 └── contratos/                    # Datos SECOP cache y depurados (excluidos de git)
 ```
 

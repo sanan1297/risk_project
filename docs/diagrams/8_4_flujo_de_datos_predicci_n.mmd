@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant U as Usuario
+    participant F as Streamlit
+    participant B as FastAPI
+    participant FE as feature_engineering
+    participant P as predictor
+    participant QA as quantitative_analysis
+    participant DB as history.db
+
+    U->>F: Sube CSV o pega texto
+    F->>F: Valida + calcula n_riesgos
+    U->>F: Click "Procesar"
+    F->>F: 🌀 spinner (cualitativo)
+    F->>B: POST /predict (file + params)
+    B->>FE: aggregate_risks(df)
+    FE-->>B: features + id_contrato
+    B->>P: predict(features)
+    P-->>B: Ridge % + prob + alerta + factores
+    B->>DB: INSERT predicción
+    DB-->>B: history_id
+    B-->>F: PrediccionSalida (con history_id)
+    F-->>U: Cards con resultado + factores
+    Note over F: Análisis cualitativo listo
+
+    F->>F: 🌀 spinner (cuantitativo)
+    F->>B: POST /predict/montecarlo (file + params + history_id)
+    B->>FE: aggregate_risks(df)
+    B->>QA: compute(df_contrato, n_iteraciones, valor_inicial, ...)
+    QA->>QA: Monte Carlo: 1000 iteraciones, Δ∈{-1,0,+1} en prob/imp
+    QA->>QA: SVR predict en cada iteración + ruido Gaussiano N(0, RMSE_var) según n_riesgos
+    QA->>QA: Tornado por tipo: perturba todos ±1, mide swing
+    QA->>QA: Desglose por riesgo: peso = (prob_i × imp_i) / Σ(prob×imp)
+    QA-->>B: percentiles, stats, histograma, tornado, desglose
+    B->>DB: UPDATE mc_iteraciones + resultado_json
+    B-->>F: MonteCarloSalida (% y COP si hay valor_inicial)
+    F-->>U: Histograma + tabla tornado + desglose por riesgo

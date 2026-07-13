@@ -1,0 +1,26 @@
+graph LR
+    A[SECOP I API] --> B[unificar_secop.py]
+    B --> C[secop1_cache.csv]
+    C --> D[depurar.py]
+    D --> E[proyectos_depurados.csv]
+    E --> F[separar_fuentes.py]
+    F --> G[proyectos_secop1.csv]
+    G --> H[excel_lite.py]
+    H --> I[proyectos_secop1_lite.csv<br/>1,560 contratos]
+    I --> J[Extracción Matrices<br/>PDF → LLM → CSV]
+    J --> K[matriz.csv<br/>6,525 riesgos]
+    K --> L[normalizar.py]
+    L --> M[matriz_clean.csv<br/>351 contratos]
+    M --> N["Feature Engineering<br/>219 features → 35 (30 TF-IDF + 5 rango)"]
+    N --> O["Modelo SVR RBF + Logistic<br/>R² 0.417 full · AUC 0.673<br/>350 contratos"]
+    O --> P[svr_regressor.pkl<br/>permutation_importance.csv]
+    P --> Q[FastAPI Backend<br/>/predict + /predict/montecarlo]
+    Q --> Q2[quantitative_analysis.py<br/>MC + Tornado + Desglose]
+    Q2 --> Q
+    Q --> R[Streamlit Frontend<br/>Dashboard + Predicción + Historial]
+    R --> S[Usuario Final]
+    
+    style Q fill:#4facfe,stroke:#333,color:white
+    style Q2 fill:#6C5CE7,stroke:#333,color:white
+    style R fill:#00B894,stroke:#333,color:white
+    style S fill:#1ABC9C,stroke:#333,color:white

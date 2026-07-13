@@ -1,0 +1,38 @@
+graph TB
+    subgraph Browser["Navegador"]
+        ST[Streamlit App<br/>puerto 8501]
+    end
+
+    subgraph Server["Servidor Local"]
+        FA[FastAPI<br/>puerto 8000 → 8003<br/>zombie PID 12248]
+        
+        subgraph BackendMod["Módulos Backend"]
+            FE[feature_engineering.py]
+            PR[predictor.py]
+            QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
+            H[history.py<br/>SQLite CRUD + stats + resultados MC]
+            TS[training_stats.py]
+            FL[feature_labels.py]
+            SC[schemas.py]
+        end
+
+        subgraph DataFiles["Archivos de Datos"]
+            M1[models/svr_regressor.pkl]
+            M2[models/classifier.pkl]
+            M3[models/scaler.pkl]
+            M4[models/feature_names.pkl]
+            M5[models/ridge_reference.pkl]
+            M6[models/ipc_trm.pkl]
+            MD[docs/matriz_clean.csv]
+        end
+
+        subgraph Runtime["En Tiempo de Ejecución"]
+            DB[(history.db<br/>SQLite)]
+        end
+    end
+
+    Browser -->|HTTP :8501| ST
+    ST -->|HTTP :8003| FA
+    FA --> BackendMod
+    BackendMod --> DataFiles
+    BackendMod --> Runtime

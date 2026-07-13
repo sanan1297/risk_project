@@ -1,0 +1,32 @@
+sequenceDiagram
+    participant U as Usuario
+    participant F as Streamlit
+    participant B as FastAPI
+    participant DB as history.db
+
+    U->>F: Navega al Historial
+    F->>F: 🌀 spinner "Cargando historial..."
+    F->>B: GET /history?page=1&page_size=15
+    B->>DB: SELECT con LIMIT/OFFSET
+    DB-->>B: 15 registros + COUNT total
+    B-->>F: {data: [...], total: N, pagina: 1, paginas: M}
+    F->>F: Renderiza 15 tarjetas
+    F-->>U: Lista paginada con navegación ◀/▶
+    
+    U->>F: Click "Siguiente ▶"
+    F->>F: hist_page += 1
+    F->>B: GET /history?page=2&page_size=15
+    B-->>F: {data: [...], total: N, pagina: 2}
+    F-->>U: Siguientes 15 registros
+
+    U->>F: Click "Ver análisis completo"
+    F->>B: GET /history/{id} (cualitativo + resultado_json)
+    B-->>F: Datos completos con MC si existe
+    F->>F: Render inline: histograma, tornado, desglose riesgos
+    F-->>U: Vista expandida con botón "Cerrar"
+    
+    U->>F: Ingresa sobrecosto real + "Guardar"
+    F->>B: PUT /history/{id} (form)
+    B->>DB: UPDATE
+    B-->>F: {status: "ok", id: N}
+    F-->>U: ✅ Guardado
