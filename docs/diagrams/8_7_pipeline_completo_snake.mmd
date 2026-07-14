@@ -22,20 +22,26 @@ graph TB
     L --> M[Feature Engineering<br/>219 → 35 features]
     subgraph R5[" "]
         direction LR
-        M --> N[SVR RBF + Logistic<br/>R² CV 0.068 · AUC 0.673] --> O[svr_regressor.pkl<br/>permutation_importance.csv]
+        M --> N[Entrenamiento SVR<br/>train_final_model.py] --> O[svr_regressor.pkl<br/>permutation_importance.csv]
     end
-    O --> P[FastAPI Backend<br/>/predict + /predict/montecarlo]
+    O --> P[MLflow Server<br/>Experiment + Registry]
+    N --> P
+    P --> Q["mlflow_tracker.py<br/>load_artifacts()"]
+    Q --> R[FastAPI Backend<br/>predict + modelo/info]
+    O --> S[models/<br/>fallback local]
     subgraph R6[" "]
         direction RL
-        P --> Q[quantitative_analysis.py<br/>MC + Tornado + Desglose]
+        R --> T["quantitative_analysis.py<br/>MC + Tornado + Desglose"]
     end
-    Q --> R[Streamlit Frontend<br/>Dashboard + Predicción + Historial]
+    T --> U[Streamlit Frontend<br/>Dashboard + Predicción + Historial]
     subgraph R7[" "]
         direction LR
-        R --> S[Usuario Final]
+        U --> V[Usuario Final]
     end
 
-    style P fill:#4facfe,stroke:#333,color:white
-    style Q fill:#6C5CE7,stroke:#333,color:white
-    style R fill:#00B894,stroke:#333,color:white
-    style S fill:#1ABC9C,stroke:#333,color:white
+    style P fill:#E17055,stroke:#333,color:white
+    style Q fill:#E17055,stroke:#333,color:white
+    style R fill:#4facfe,stroke:#333,color:white
+    style T fill:#6C5CE7,stroke:#333,color:white
+    style U fill:#00B894,stroke:#333,color:white
+    style V fill:#1ABC9C,stroke:#333,color:white

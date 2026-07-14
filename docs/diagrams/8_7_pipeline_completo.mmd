@@ -12,15 +12,22 @@ graph LR
     K --> L[normalizar.py]
     L --> M[matriz_clean.csv<br/>351 contratos]
     M --> N["Feature Engineering<br/>219 features → 35 (30 TF-IDF + 5 rango)"]
-    N --> O["Modelo SVR RBF + Logistic<br/>R² CV 0.068 (full 0.417) · AUC 0.673<br/>350 contratos"]
-    O --> P[svr_regressor.pkl<br/>permutation_importance.csv]
-    P --> Q[FastAPI Backend<br/>/predict + /predict/montecarlo]
-    Q --> Q2[quantitative_analysis.py<br/>MC + Tornado + Desglose]
-    Q2 --> Q
-    Q --> R[Streamlit Frontend<br/>Dashboard + Predicción + Historial]
-    R --> S[Usuario Final]
-    
-    style Q fill:#4facfe,stroke:#333,color:white
-    style Q2 fill:#6C5CE7,stroke:#333,color:white
-    style R fill:#00B894,stroke:#333,color:white
-    style S fill:#1ABC9C,stroke:#333,color:white
+    N --> O["Entrenamiento SVR<br/>train_final_model.py"]
+    O --> P[MLflow Server<br/>Experiment + Model Registry]
+    O --> Q[svr_regressor.pkl<br/>permutation_importance.csv]
+    P --> R["train_final_model.py<br/>log_params, log_metrics, log_artifacts"]
+    R --> P
+    Q --> S[models/<br/>fallback local]
+    P --> T["mlflow_tracker.py<br/>load_artifacts()"]
+    T --> U["FastAPI Backend<br/>/predict + /model/info"]
+    U --> V["quantitative_analysis.py<br/>MC + Tornado + Desglose"]
+    V --> U
+    U --> W[Streamlit Frontend<br/>Dashboard + Predicción + Historial]
+    W --> X[Usuario Final]
+
+    style P fill:#E17055,stroke:#333,color:white
+    style T fill:#E17055,stroke:#333,color:white
+    style U fill:#4facfe,stroke:#333,color:white
+    style V fill:#6C5CE7,stroke:#333,color:white
+    style W fill:#00B894,stroke:#333,color:white
+    style X fill:#1ABC9C,stroke:#333,color:white

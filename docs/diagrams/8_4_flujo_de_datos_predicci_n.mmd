@@ -2,10 +2,18 @@ sequenceDiagram
     participant U as Usuario
     participant F as Streamlit
     participant B as FastAPI
+    participant ML as MLflow
     participant FE as feature_engineering
     participant P as predictor
     participant QA as quantitative_analysis
     participant DB as history.db
+
+    Note over B,ML: Startup: carga de modelo
+    B->>ML: init_from_mlflow()
+    ML-->>B: ModelVersion (run_id, version, experiment_id)
+    B->>ML: load_artifacts() / load_permutation_importance()
+    ML-->>B: svr_regressor, classifier, scaler, features
+    Note over B: Si MLflow no disponible:<br/>fallback a models/*.pkl
 
     U->>F: Sube CSV o pega texto
     F->>F: Valida + calcula n_riesgos

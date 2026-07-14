@@ -1,29 +1,38 @@
 graph TB
-    subgraph Frontend["Frontend — Streamlit (frontend/streamlit_app.py)"]
-        DASH[Dashboard<br/>Uso del Modelo + Entrenamiento]
-        PRED[Predicción<br/>CSV / Texto + MC]
-        HIST[Historial<br/>Paginado + Ver completo]
+    subgraph Docker["Docker Compose"]
+
+        subgraph Frontend["Frontend — Streamlit (frontend/streamlit_app.py)"]
+            DASH[Dashboard<br/>Uso del Modelo + Entrenamiento]
+            PRED[Predicción<br/>CSV / Texto + MC]
+            HIST[Historial<br/>Paginado + Ver completo]
+        end
+
+        subgraph Backend["Backend — FastAPI (backend/)"]
+            API[main.py<br/>REST API]
+            FE[feature_engineering.py<br/>Agregación de riesgos → 35 features]
+            PREDICT[predictor.py<br/>SVR RBF R² CV 0.068 + Logistic AUC 0.673]
+            MLF[mlflow_tracker.py<br/>Carga desde MLflow<br/>fallback a local]
+            QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
+            HISTDB[history.py<br/>SQLite CRUD + resultado_json MC]
+            TRAIN[training_stats.py<br/>351 contratos, R², coeficientes]
+            LABELS[feature_labels.py<br/>Labels legibles]
+        end
+
+        subgraph MLflowSrv["MLflow Server (puerto :5000)"]
+            MLREG[Model Registry<br/>risk-predictor-svr v1]
+            MLEXP[Experiment<br/>risk-predictor]
+            MLART[Artifact Store<br/>modelos .pkl, metrics, params]
+        end
+
     end
 
-    subgraph Backend["Backend — FastAPI (backend/)"]
-        API[main.py<br/>REST API]
-        FE[feature_engineering.py<br/>Agregación de riesgos → 35 features]
-        PREDICT[predictor.py<br/>SVR RBF R² CV 0.068 + Logistic AUC 0.673]
-        QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
-        HISTDB[history.py<br/>SQLite CRUD + resultado_json MC]
-        TRAIN[training_stats.py<br/>351 contratos, R², coeficientes]
-        LABELS[feature_labels.py<br/>Labels legibles]
-    end
-
-    subgraph Data["Datos Estáticos"]
-        M[MODELOS<br/>svr_regressor.pkl<br/>classifier.pkl<br/>ridge_reference.pkl<br/>permutation_importance.csv<br/>scaler.pkl<br/>feature_names.pkl<br/>ipc_trm.pkl]
-        MAT[matriz_clean.csv<br/>6,525 riesgos<br/>351 contratos]
-    end
-
-    subgraph Storage["Almacenamiento Dinámico"]
-        DB[(history.db<br/>SQLite<br/>+ resultado_json)]
+    subgraph Volumes["Volúmenes Persistentes"]
+        DB[(history.db<br/>SQLite<br/>predicciones + resultados MC)]
+        MLDATA[(mlflow_data<br/>SQLite + artifacts)]
     end
 
     Frontend -->|HTTP :8003| Backend
-    Backend --> Data
-    Backend -->|lectura/escritura| Storage
+    Backend -->|HTTP :5000| MLflowSrv
+    Backend -->|lectura startup| MLflowSrv
+    Backend -->|lectura/escritura| DB
+    MLflowSrv --> MLDATA
