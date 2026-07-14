@@ -84,6 +84,7 @@ risk_project/
 │   ├── quantitative_analysis.py  # Monte Carlo + Tornado + RMSE variable por n_riesgos
 │   ├── history.py                # SQLite CRUD + stats + resultado_json MC
 │   ├── training_stats.py         # Estadísticas de entrenamiento (351 contratos)
+│   ├── mlflow_tracker.py          # Carga de modelos desde MLflow (fallback local)
 │   └── feature_labels.py         # Labels legibles para features
 ├── frontend/
 │   └── streamlit_app.py          # App Streamlit (Dashboard + Predicción + Historial)
@@ -99,6 +100,9 @@ risk_project/
 ├── scripts/
 │   ├── train_final_model.py      # Entrenamiento SVR reproducible
 │   └── compute_ipc_range.py      # Cálculo IPC acumulado + TRM promedio por rango
+├── Dockerfile                    # Imagen Python 3.12-slim + uv (multipropósito)
+├── docker-compose.yml            # 3 servicios: mlflow, backend, frontend
+├── .dockerignore
 ├── estudio_data/                 # Normalización y EDA
 ├── notebooks/
 │   ├── evaluacion_modelos.py     # Benchmark Ridge vs SVR vs RF vs MLP
@@ -128,6 +132,7 @@ risk_project/
 | `DELETE` | `/history/{id}` | Eliminar predicción |
 | `DELETE` | `/history` | Limpiar todo el historial |
 | `GET` | `/stats/usage` | Estadísticas de uso (predicciones, MC, factores) |
+| `GET` | `/model/info` | Metadatos del modelo (versión, experimento, MLflow) |
 | `GET` | `/stats/training` | Estadísticas del dataset de entrenamiento |
 
 ### Vistas Frontend
@@ -137,6 +142,8 @@ risk_project/
 3. **Historial** — Lista paginada con "Ver análisis completo" inline
 
 ## Setup
+
+### Local (desarrollo)
 
 ```bash
 # 1. Clonar
@@ -160,16 +167,57 @@ uv run uvicorn backend.main:app --reload
 uv run streamlit run frontend/streamlit_app.py
 ```
 
+### Docker (producción)
+
+```bash
+# Levantar los 3 servicios
+docker compose up -d
+
+# Ver estado
+docker compose ps
+
+# Entrenar modelo (opcional, dentro del backend)
+docker compose exec backend uv run train
+
+# Ver logs
+docker compose logs -f
+```
+
+| Servicio | Puerto | URL |
+|---|---|---|
+| MLflow (experimentos) | `:5000` | http://localhost:5000 |
+| Backend API | `:8003` | http://localhost:8003/docs |
+| Frontend | `:8501` | http://localhost:8501 |
+
 ## Stack
 
 | Capa | Tecnología |
-|---|---|
-| Backend | Python 3.14+, FastAPI, Uvicorn |
+|---|---|---|
+| Backend | Python 3.12+, FastAPI, Uvicorn |
 | Frontend | Streamlit 1.59+, Plotly |
 | ML | scikit-learn (SVR, LogisticRegression, TF-IDF, Ridge referencia) |
+| Trazabilidad | **MLflow** (experimentos + model registry + artifact store) |
+| Contenerización | **Docker Compose** (3 servicios: mlflow, backend, frontend) |
 | Almacenamiento | SQLite (predicciones + resultados MC), joblib/pickle (modelos) |
 | Extracción datos | Pandas, requests (API datos.gov.co) |
 | Notebooks | Jupytext, scikit-learn |
+
+## MLflow Traceability
+
+El modelo y sus experimentos se registran en **MLflow** para trazabilidad completa:
+
+- **Servidor:** `http://localhost:5000` (UI web para explorar experimentos)
+- **Experiment:** `risk-predictor` — todos los runs de entrenamiento
+- **Model Registry:** `risk-predictor-svr` — modelo promovido a producción
+- **Fallback local:** si MLflow no está disponible, el backend carga artefactos desde `models/`
+
+Cada entrenamiento (`uv run train`) registra:
+- Parámetros: `C`, `gamma`, `kernel`, feature count
+- Métricas: `r2_cv`, `auc_cv`, `rmse`, `r2_full`
+- Artefactos: `.pkl` del modelo, `permutation_importance.csv`, scaler, feature names
+- Model Registry: versión auto-incremental con run_id vinculado
+
+El endpoint `GET /model/info` expone los metadatos del modelo activo (versión, experimento, run_id, estado de conexión MLflow).
 
 ## Source Data
 

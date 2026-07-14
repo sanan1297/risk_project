@@ -252,6 +252,9 @@ El dataset `matriz.csv` se construyó fuera del pipeline del repositorio. Para c
 ```
 risk_project/
 ├── .gitignore                     # Excluye .csv, .xlsx, __pycache__, .venv/
+├── Dockerfile                     # Imagen Python 3.12-slim + uv (multipropósito)
+├── docker-compose.yml             # 3 servicios: mlflow, backend, frontend
+├── .dockerignore
 ├── unificar_secop.py              # Descarga SECOP I + II desde API, guarda cache
 ├── depurar.py                     # Lee cache, normaliza, filtra, exporta CSV final
 ├── separar_fuentes.py             # Divide depurados en SECOP I y SECOP II, elimina duplicados por URL en SECOP I
@@ -300,6 +303,7 @@ Exposición REST con FastAPI. El frontend apunta a `http://localhost:8003` (work
 | `PUT` | `/history/{id}` | `sobrecosto_real`, `notas` (form) | `{"status": "ok", "id": N}` | Guardar validación (sobrecosto real observado) |
 | `DELETE` | `/history/{id}` | — | `{"status": "ok", "id": N}` | Eliminar una predicción del historial |
 | `DELETE` | `/history` | — | `{"status": "ok"}` | Limpiar todo el historial |
+| `GET` | `/model/info` | — | `model_version`, `run_id`, `experiment_id`, `mlflow_available`, métricas SVR | Metadatos del modelo cargado (desde MLflow o local) |
 | `GET` | `/stats/usage` | — | Agregados de `history.db` (total predicciones, % alto riesgo, serie temporal, top factores, MC stats) | Dashboard de uso del modelo |
 | `GET` | `/stats/training` | — | Agregados de datos de entrenamiento + coeficientes del modelo | Dashboard de entrenamiento |
 
@@ -372,6 +376,70 @@ La app es single-page con navegación vía `?view=` en query params:
 
 ---
 
+### 8.10 Trazabilidad con MLflow
+
+Se integró **MLflow 3.14** como sistema de trazabilidad de experimentos y modelo:
+
+- **Servidor independiente** (`ghcr.io/mlflow/mlflow:v3.14.0`) con backend SQLite y artifact store local
+- **Registro de experimentos:** cada entrenamiento (`scripts/train_final_model.py`) registra params, metrics y artefactos en el experimento `risk-predictor`
+- **Model Registry:** el modelo se registra como `risk-predictor-svr` con versionado auto-incremental
+- **Backend (`backend/mlflow_tracker.py`):** carga modelo desde MLflow en startup; fallback a `models/` si no hay conexión
+- **Endpoint `GET /model/info`:** expone `model_version`, `run_id`, `experiment_id` y estado de conexión MLflow
+- **Frontend:** sidebar muestra versión activa del modelo y run_id
+
+Flujo de carga de artefactos:
+1. Backend inicia → `init_from_mlflow()` conecta con MLflow server
+2. `load_artifacts()` consulta `get_latest_versions(stages=["Production"])`
+3. Si hay modelo registrado, descarga artefactos desde MLflow artifact store
+4. Si no hay conexión o modelo, carga desde `models/` (archivos `.pkl` locales)
+5. `load_permutation_importance()` sigue el mismo patrón
+
+### 8.11 Contenerización con Docker
+
+La aplicación se despliega con **Docker Compose** en 3 servicios:
+
+| Servicio | Imagen | Puerto | Depende de |
+|---|---|---|---|
+| `mlflow` | `ghcr.io/mlflow/mlflow:v3.14.0` | `:5000` | — |
+| `backend` | `risk-predictor:latest` (Dockerfile) | `:8003` | `mlflow` |
+| `frontend` | `risk-predictor:latest` (misma imagen) | `:8501` | `backend` |
+
+**Comandos principales:**
+
+```bash
+# Iniciar todos los servicios
+docker compose up -d
+
+# Ver estado
+docker compose ps
+
+# Reconstruir imagen del backend
+docker compose build backend
+
+# Ver logs
+docker compose logs -f
+
+# Ejecutar entrenamiento dentro del backend
+docker compose exec backend uv run train
+```
+
+**Volúmenes persistentes:**
+- `history_data`: base SQLite de predicciones (`/app/data/history.db`)
+- `mlflow_data`: base SQLite y artefactos de MLflow (`/mlflow/`)
+
+**Variables de entorno configurables:**
+
+| Servicio | Variable | Default | Descripción |
+|---|---|---|---|
+| `backend` | `HISTORY_DB_PATH` | `/app/data/history.db` | Ruta de la base de datos |
+| `backend` | `MLFLOW_TRACKING_URI` | `http://mlflow:5000` | URI del servidor MLflow |
+| `backend` | `MLFLOW_EXPERIMENT_NAME` | `risk-predictor` | Experimento MLflow |
+| `backend` | `MLFLOW_MODEL_NAME` | `risk-predictor-svr` | Nombre del modelo registrado |
+| `frontend` | `API_URL` | `http://backend:8003` | URL del backend API |
+| `mlflow` | `MLFLOW_SERVER_ALLOWED_HOSTS` | `*` | Hosts permitidos (seguridad DNS rebinding) |
+
+---
+
 ## 9. Funcionalidades del Prototipo
 
 ### 9.1 Dashboard — Uso del Modelo
@@ -431,10 +499,14 @@ La app es single-page con navegación vía `?view=` en query params:
 
 ```
 risk_project/
+├── Dockerfile                    # Imagen Python 3.12-slim + uv (multipropósito)
+├── docker-compose.yml            # 3 servicios: mlflow, backend, frontend
+├── .dockerignore
 ├── backend/
-│   ├── main.py                   # FastAPI REST API (10 endpoints)
+│   ├── main.py                   # FastAPI REST API (11 endpoints)
 │   ├── schemas.py                # Pydantic models
 │   ├── predictor.py              # Carga SVR + LogisticRegression (35 features, permutation importance)
+│   ├── mlflow_tracker.py         # Carga de modelos desde MLflow Model Registry (fallback local)
 │   ├── feature_engineering.py    # Agregación de riesgos → 35 features (rango fechas: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio)
 │   ├── quantitative_analysis.py  # Monte Carlo (1000 iter, RMSE variable por n_riesgos), tornado, desglose
 │   ├── history.py                # CRUD SQLite + stats + almacenamiento resultado_json del MC
@@ -586,3 +658,5 @@ Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 20
 | 2026-07-13 | **Grupo C**: C-365 Puente Aranda ($477.8B, activo). SVR=27.5%, ALTO RIESGO. Primer caso de predicción a futuro sin sobrecosto real |
 | 2026-07-13 | **Grupo D**: Prueba temporal C-128 en 13 rangos (2010-2024). Variación SVR=2.2 pp. La matriz de riesgos domina sobre features macro |
 | 2026-07-13 | Automatización de pruebas: script `run_c128_temporal.py` ejecuta 13 predicciones + MC vía API y guarda resultados en CSV |
+| 2026-07-14 | **Contenerización**: Dockerfile + docker-compose.yml (3 servicios: mlflow, backend, frontend). Variables de entorno configurables. Volúmenes persistentes. |
+| 2026-07-14 | **Trazabilidad MLflow**: servidor MLflow 3.14, experimento `risk-predictor`, model registry `risk-predictor-svr`. Backend carga modelo desde MLflow con fallback local. Endpoint `GET /model/info`. Entrenamiento registra params, metrics y artifacts. |

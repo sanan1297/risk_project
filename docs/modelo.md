@@ -261,3 +261,4 @@ SHAP requiere numba, incompatible con numpy >=2.5 (Python 3.14). Se usó permuta
 | 2026-07-07 | v1 | Documento inicial. Benchmark v1 (219 vars) y v2 (33 vars). Ridge campeón (R² 0.103). |
 | 2026-07-09 | v2 | Re-entreno final. `tfidf_cualquier` → `tfidf_obra`. Ridge R² 0.149, AUC 0.662. |
 | 2026-07-11 | v3 | Migración a rango de fechas. Ridge descartado (R² CV=0.066). SVR nuevo campeón (R² CV=0.072, AUC=0.673). Permutation importance. RMSE variable. |
+| 2026-07-14 | v4 | Integración MLflow: experimentos, model registry, artifact store. Backend carga modelo desde MLflow con fallback local. |

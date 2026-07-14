@@ -61,8 +61,8 @@ Correr `estudio_modelos/modelo_final.ipynb` con los 5 contratos del Grupo A. Ano
 - Alerta (ALTO / MODERADO)
 
 ### Paso 2: Ejecutar prototipo (API + Frontend)
-1. Iniciar backend: `uvicorn backend.main:app --reload`
-2. Iniciar frontend: `streamlit run frontend/streamlit_app.py`
+1. Iniciar backend: `uv run uvicorn backend.main:app --reload` (o `docker compose up -d` para contenerizado)
+2. Iniciar frontend: `uv run streamlit run frontend/streamlit_app.py` (o acceder a `http://localhost:8501` si está en Docker)
 3. Subir cada CSV y registrar salida
 
 ### Paso 3: Comparar y documentar
@@ -81,10 +81,31 @@ Los resultados completos están documentados en las secciones 6 y 7.
 
 ## 5. Entorno de Pruebas
 
-- **Backend:** FastAPI en `http://localhost:8000`
+### Local (desarrollo)
+
+- **Backend:** FastAPI en `http://localhost:8003`
 - **Frontend:** Streamlit en `http://localhost:8501`
+- **MLflow:** `http://localhost:5000` (UI de experimentos, opcional)
 - **Modelos:** `models/svr_regressor.pkl` (regresor), `models/classifier.pkl` (clasificador), `models/permutation_importance.csv`, `models/ridge_reference.pkl`, `models/ipc_trm.pkl`
 - **Datos de entrenamiento:** `docs/matriz_clean.csv` (6,525 riesgos, 351 contratos)
+
+### Docker (entorno contenerizado)
+
+```bash
+# Iniciar servicios
+docker compose up -d
+
+# Verificar estado
+docker compose ps
+
+# Endpoints
+# - Backend: http://localhost:8003
+# - Frontend: http://localhost:8501
+# - MLflow UI: http://localhost:5000
+
+# Ejecutar pruebas vía API
+curl -X POST http://localhost:8003/predict -F "file=@tests/data/c-001.csv"
+```
 
 ---
 

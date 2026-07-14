@@ -1,10 +1,11 @@
+import os
 import sqlite3
 from pathlib import Path
 from datetime import datetime
 import json
 from collections import Counter
 
-DB_PATH = Path(__file__).resolve().parent / "history.db"
+DB_PATH = Path(os.environ.get("HISTORY_DB_PATH", str(Path(__file__).resolve().parent / "history.db")))
 
 
 def _get_conn():

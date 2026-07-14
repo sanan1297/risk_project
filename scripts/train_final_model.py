@@ -1,13 +1,16 @@
+import os
+import logging
 from pathlib import Path
 
 import joblib
+import mlflow
 import numpy as np
 import pandas as pd
 from sklearn.svm import SVR
 from sklearn.linear_model import Ridge, LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import cross_val_score, cross_val_predict
+from sklearn.model_selection import cross_val_score
 from sklearn.metrics import r2_score, roc_auc_score
 from sklearn.inspection import permutation_importance
 
@@ -15,11 +18,18 @@ import sys
 sys.path.insert(0, str(Path.cwd()))
 from estudio_data.features import engineer_features, STOP_WORDS
 
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
+
 ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "models"
 DATA_DIR = ROOT / "docs"
 
 MODELS_DIR.mkdir(exist_ok=True)
+
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
+MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "risk-predictor")
+MLFLOW_MODEL_NAME = os.environ.get("MLFLOW_MODEL_NAME", "risk-predictor-svr")
 
 IPC_TRM = {
     2000: {"ipc": 8.75, "trm": 2052}, 2001: {"ipc": 7.65, "trm": 2200},
@@ -88,99 +98,188 @@ def add_macro_features(df: pd.DataFrame, macro_df: pd.DataFrame) -> pd.DataFrame
 
 
 def main() -> None:
-    print("=" * 55)
-    print("  ENTRENAMIENTO FINAL — SVR (kernel RBF)")
-    print("  Features: 35 (30 TF-IDF + 5 rango de fechas)")
-    print("=" * 55)
+    logger.info("=" * 55)
+    logger.info("  ENTRENAMIENTO FINAL — SVR (kernel RBF)")
+    logger.info("  Features: 35 (30 TF-IDF + 5 rango de fechas)")
+    logger.info("=" * 55)
 
-    print("\n1. Cargando matriz_clean.csv...")
-    matriz = pd.read_csv(DATA_DIR / "matriz_clean.csv", encoding="utf-8-sig")
-    print(f"   Riesgos: {len(matriz):,} | Contratos: {matriz['id_contrato'].nunique()}")
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    exp = mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
-    print("\n2. Cargando features de rango macro...")
-    macro = pd.read_csv(DATA_DIR / "contratos_macro.csv")
-    print(f"   {len(macro)} contratos con ipc_acumulado + trm_promedio")
+    with mlflow.start_run(experiment_id=exp.experiment_id) as run:
+        run_id = run.info.run_id
+        logger.info("MLflow run ID: %s", run_id)
 
-    print("\n3. Feature engineering...")
-    df_feat = engineer_features(matriz)
-    df_feat = add_macro_features(df_feat, macro)
-    n_antes = len(df_feat)
-    df_feat = df_feat[df_feat["sobrecosto"] < 200].copy()
-    print(f"   Features: {df_feat.shape[1]} | Contratos: {len(df_feat)} (outliers: {n_antes - len(df_feat)})")
+        mlflow.log_params({
+            "model_type": "SVR",
+            "kernel": "rbf",
+            "C": 10,
+            "gamma": "scale",
+            "feature_count": len(FEATURES_35),
+            "feature_set": "30_tfidf_5_rango",
+            "top_features": len(TOP_30_FEATURES),
+            "control_vars": len(CONTROL_VARS_RANGO),
+            "max_features_tfidf": 100,
+            "ngram_range": "(1,2)",
+            "ridge_alpha": 244.0,
+            "classifier": "LogisticRegression",
+            "classifier_C": 1.0,
+            "classifier_max_iter": 1000,
+            "classifier_class_weight": "balanced",
+            "random_state": 42,
+            "outlier_threshold": 200,
+            "n_repeats_permutation": 10,
+        })
 
-    missing = [c for c in FEATURES_35 if c not in df_feat.columns]
-    if missing:
-        print(f"   ERROR: Faltan columnas: {missing}")
-        return
+        logger.info("\n1. Cargando matriz_clean.csv...")
+        matriz = pd.read_csv(DATA_DIR / "matriz_clean.csv", encoding="utf-8-sig")
+        n_riesgos_total = len(matriz)
+        n_contratos_total = int(matriz['id_contrato'].nunique())
+        mlflow.log_metrics({"n_riesgos_total": n_riesgos_total, "n_contratos_total": n_contratos_total})
+        logger.info("   Riesgos: %s | Contratos: %s", f"{n_riesgos_total:,}", n_contratos_total)
 
-    X = df_feat[FEATURES_35].values
-    y = df_feat["sobrecosto"].values
-    y_bin = (y > 25).astype(int)
+        logger.info("\n2. Cargando features de rango macro...")
+        macro = pd.read_csv(DATA_DIR / "contratos_macro.csv")
+        logger.info("   %s contratos con ipc_acumulado + trm_promedio", len(macro))
 
-    print("\n4. Guardando vectorizador TF-IDF...")
-    vectorizer = TfidfVectorizer(max_features=100, stop_words=STOP_WORDS, ngram_range=(1, 2))
-    textos = matriz.groupby("id_contrato")["descripcion_riesgo"].apply(
-        lambda g: " ".join(g.dropna().astype(str))
-    )
-    vectorizer.fit(textos)
-    print(f"   {len(vectorizer.get_feature_names_out())} tokens")
+        logger.info("\n3. Feature engineering...")
+        df_feat = engineer_features(matriz)
+        df_feat = add_macro_features(df_feat, macro)
+        n_antes = len(df_feat)
+        df_feat = df_feat[df_feat["sobrecosto"] < 200].copy()
+        n_despues = len(df_feat)
+        mlflow.log_metrics({"contratos_antes_outlier": n_antes, "contratos_despues_outlier": n_despues})
+        logger.info("   Features: %s | Contratos: %s (outliers: %s)", df_feat.shape[1], n_despues, n_antes - n_despues)
 
-    print("\n5. Escalando features...")
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+        missing = [c for c in FEATURES_35 if c not in df_feat.columns]
+        if missing:
+            logger.info("   ERROR: Faltan columnas: %s", missing)
+            return
 
-    print("\n6. Entrenando modelo campeon: SVR (kernel RBF)...")
-    svr = SVR(kernel="rbf", C=10, gamma="scale")
-    svr.fit(X_scaled, y)
-    y_pred = svr.predict(X_scaled)
-    r2_full = r2_score(y, y_pred)
-    cv_r2 = cross_val_score(svr, X_scaled, y, cv=5, scoring="r2")
-    print(f"   R² full: {r2_full:.4f} | R² CV: {cv_r2.mean():.4f} ± {cv_r2.std():.4f}")
+        X = df_feat[FEATURES_35].values
+        y = df_feat["sobrecosto"].values
+        y_bin = (y > 25).astype(int)
 
-    print("\n7. Entrenando clasificador (LogisticRegression)...")
-    classifier = LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced", random_state=42)
-    classifier.fit(X_scaled, y_bin)
-    cv_auc = cross_val_score(classifier, X_scaled, y_bin, cv=5, scoring="roc_auc")
-    print(f"   AUC CV: {cv_auc.mean():.4f} ± {cv_auc.std():.4f}")
+        mlflow.log_metrics({
+            "target_mean": float(np.mean(y)),
+            "target_median": float(np.median(y)),
+            "target_std": float(np.std(y)),
+            "alto_riesgo_ratio": float(np.mean(y_bin)),
+        })
 
-    print("\n8. Permutation importance global (10 repeticiones)...")
-    imp = permutation_importance(svr, X_scaled, y, n_repeats=10, random_state=42, n_jobs=-1)
-    imp_df = pd.DataFrame({
-        "feature": FEATURES_35,
-        "importance": imp.importances_mean,
-        "std": imp.importances_std,
-    }).sort_values("importance", ascending=False)
-    imp_df.to_csv(MODELS_DIR / "permutation_importance.csv", index=False, encoding="utf-8-sig")
+        logger.info("\n4. Guardando vectorizador TF-IDF...")
+        vectorizer = TfidfVectorizer(max_features=100, stop_words=STOP_WORDS, ngram_range=(1, 2))
+        textos = matriz.groupby("id_contrato")["descripcion_riesgo"].apply(
+            lambda g: " ".join(g.dropna().astype(str))
+        )
+        vectorizer.fit(textos)
+        n_tokens = len(vectorizer.get_feature_names_out())
+        mlflow.log_metric("tfidf_tokens", n_tokens)
+        logger.info("   %s tokens", n_tokens)
 
-    print("\n9. Ridge de referencia (para coefs interpretables)...")
-    ridge = Ridge(alpha=244.0, random_state=42)
-    ridge.fit(X_scaled, y)
-    ridge_coefs = pd.DataFrame({"feature": FEATURES_35, "coef": ridge.coef_})
-    ridge_coefs.to_csv(MODELS_DIR / "coeficientes_ridge.csv", index=False, encoding="utf-8-sig")
+        logger.info("\n5. Escalando features...")
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
 
-    print("\n10. Guardando artefactos...")
-    joblib.dump(svr, MODELS_DIR / "svr_regressor.pkl")
-    joblib.dump(classifier, MODELS_DIR / "classifier.pkl")
-    joblib.dump(scaler, MODELS_DIR / "scaler.pkl")
-    joblib.dump(FEATURES_35, MODELS_DIR / "feature_names.pkl")
-    joblib.dump(vectorizer, MODELS_DIR / "tfidf_vectorizer.pkl")
-    joblib.dump(IPC_TRM, MODELS_DIR / "ipc_trm.pkl")
-    joblib.dump(ridge, MODELS_DIR / "ridge_reference.pkl")
+        logger.info("\n6. Entrenando modelo campeon: SVR (kernel RBF)...")
+        svr = SVR(kernel="rbf", C=10, gamma="scale")
+        svr.fit(X_scaled, y)
+        y_pred = svr.predict(X_scaled)
+        r2_full = r2_score(y, y_pred)
+        cv_r2 = cross_val_score(svr, X_scaled, y, cv=5, scoring="r2")
+        rmse = float(np.sqrt(np.mean((y - y_pred) ** 2)))
 
-    for f in sorted(MODELS_DIR.iterdir()):
-        print(f"   {f.name}")
+        mlflow.log_metrics({
+            "r2_full": r2_full,
+            "r2_cv_mean": float(cv_r2.mean()),
+            "r2_cv_std": float(cv_r2.std()),
+            "rmse": rmse,
+        })
+        logger.info("   R² full: %.4f | R² CV: %.4f ± %.4f | RMSE: %.2f", r2_full, cv_r2.mean(), cv_r2.std(), rmse)
 
-    print("\n11. Top features por permutation importance:")
-    for _, r in imp_df.head(10).iterrows():
-        print(f"   + {r['feature']:35s} {r['importance']:.4f} ± {r['std']:.4f}")
-    for _, r in imp_df.tail(5).iterrows():
-        print(f"   - {r['feature']:35s} {r['importance']:.4f} ± {r['std']:.4f}")
+        logger.info("\n7. Entrenando clasificador (LogisticRegression)...")
+        classifier = LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced", random_state=42)
+        classifier.fit(X_scaled, y_bin)
+        cv_auc = cross_val_score(classifier, X_scaled, y_bin, cv=5, scoring="roc_auc")
+        y_prob = classifier.predict_proba(X_scaled)[:, 1]
+        auc_full = roc_auc_score(y_bin, y_prob)
 
-    print(f"\n12. Resumen:")
-    print(f"   Regresion: SVR R² CV={cv_r2.mean():.4f} | AUC clasif CV={cv_auc.mean():.4f}")
-    print(f"   Modelo campeon: SVR (kernel RBF, C=10, gamma=scale)")
-    print(f"   Interpretabilidad: permutation importance (10 reps)")
-    print("\nEntrenamiento completado.")
+        mlflow.log_metrics({
+            "auc_cv_mean": float(cv_auc.mean()),
+            "auc_cv_std": float(cv_auc.std()),
+            "auc_full": float(auc_full),
+        })
+        logger.info("   AUC CV: %.4f ± %.4f | AUC full: %.4f", cv_auc.mean(), cv_auc.std(), auc_full)
+
+        logger.info("\n8. Permutation importance global (10 repeticiones)...")
+        imp = permutation_importance(svr, X_scaled, y, n_repeats=10, random_state=42, n_jobs=-1)
+        imp_df = pd.DataFrame({
+            "feature": FEATURES_35,
+            "importance": imp.importances_mean,
+            "std": imp.importances_std,
+        }).sort_values("importance", ascending=False)
+
+        perm_path = MODELS_DIR / "permutation_importance.csv"
+        imp_df.to_csv(perm_path, index=False, encoding="utf-8-sig")
+        mlflow.log_artifact(str(perm_path))
+
+        logger.info("\n9. Ridge de referencia (para coefs interpretables)...")
+        ridge = Ridge(alpha=244.0, random_state=42)
+        ridge.fit(X_scaled, y)
+        ridge_coefs = pd.DataFrame({"feature": FEATURES_35, "coef": ridge.coef_})
+        ridge_path = MODELS_DIR / "coeficientes_ridge.csv"
+        ridge_coefs.to_csv(ridge_path, index=False, encoding="utf-8-sig")
+        mlflow.log_artifact(str(ridge_path))
+
+        logger.info("\n10. Guardando artefactos locales...")
+        for name, obj in [
+            ("svr_regressor.pkl", svr),
+            ("classifier.pkl", classifier),
+            ("scaler.pkl", scaler),
+            ("feature_names.pkl", FEATURES_35),
+            ("tfidf_vectorizer.pkl", vectorizer),
+            ("ipc_trm.pkl", IPC_TRM),
+            ("ridge_reference.pkl", ridge),
+        ]:
+            path = MODELS_DIR / name
+            joblib.dump(obj, path)
+            mlflow.log_artifact(str(path))
+
+        for f in sorted(MODELS_DIR.iterdir()):
+            logger.info("   %s", f.name)
+
+        logger.info("\n11. Registrando modelo en MLflow Model Registry...")
+        mlflow.sklearn.log_model(svr, "svr_regressor")
+        mlflow.sklearn.log_model(classifier, "classifier")
+
+        try:
+            result = mlflow.register_model(
+                model_uri=f"runs:/{run_id}/svr_regressor",
+                name=MLFLOW_MODEL_NAME,
+            )
+            client = mlflow.tracking.MlflowClient()
+            client.transition_model_version_stage(
+                name=MLFLOW_MODEL_NAME,
+                version=result.version,
+                stage="Production",
+            )
+            logger.info("   Modelo registrado: %s v%s", MLFLOW_MODEL_NAME, result.version)
+        except Exception as e:
+            logger.warning("   No se pudo registrar el modelo en MLflow: %s", e)
+
+        logger.info("\n12. Top features por permutation importance:")
+        for _, r in imp_df.head(10).iterrows():
+            logger.info("   + %-35s %.4f ± %.4f", r['feature'], r['importance'], r['std'])
+        for _, r in imp_df.tail(5).iterrows():
+            logger.info("   - %-35s %.4f ± %.4f", r['feature'], r['importance'], r['std'])
+
+        logger.info("\n13. Resumen:")
+        logger.info("   Regresion: SVR R² CV=%.4f | AUC clasif CV=%.4f", cv_r2.mean(), cv_auc.mean())
+        logger.info("   Modelo: SVR (kernel RBF, C=10, gamma=scale)")
+        logger.info("   MLflow run: %s", run_id)
+        logger.info("   MLflow UI: %s/#/experiments/%s/runs/%s", MLFLOW_TRACKING_URI, exp.experiment_id, run_id)
+
+    logger.info("\nEntrenamiento completado.")
 
 
 if __name__ == "__main__":

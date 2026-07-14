@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import requests
@@ -8,7 +9,7 @@ import plotly.io as pio
 # Configurar tema global para que el texto sea negro (para modo claro)
 pio.templates.default = "plotly_white"
 
-API_URL = "http://localhost:8003"
+API_URL = os.environ.get("API_URL", "http://localhost:8003")
 
 st.set_page_config(
     page_title="Risk Control Dashboard",
@@ -322,6 +323,17 @@ with st.sidebar:
         st.caption("AUC CV: 0.673")
         st.caption("RMSE: 17.1 pp")
         st.caption("Modelo: SVR kernel RBF")
+
+    try:
+        mr = requests.get(f"{API_URL}/model/info", timeout=5).json()
+        if mr.get("model_version"):
+            with st.container(border=True):
+                st.markdown("**:material/model_training: Trazabilidad MLflow**")
+                st.caption(f'Modelo v{mr["model_version"]}')
+                if mr.get("run_id"):
+                    st.caption(f'Run: {mr["run_id"][:8]}...')
+    except Exception:
+        pass
 
     st.space("large")
     st.caption("Risk Control Dashboard v0.6")

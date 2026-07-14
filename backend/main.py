@@ -11,6 +11,7 @@ from .feature_labels import label_feature
 from . import history
 from . import training_stats
 from . import quantitative_analysis
+from . import mlflow_tracker
 
 app = FastAPI(
     title="Risk Predictor API",
@@ -32,11 +33,38 @@ REQUIRED_COLS = ["id_contrato", "descripcion_riesgo", "probabilidad", "impacto",
 @app.on_event("startup")
 def startup():
     history.init()
+    mlflow_tracker.init_from_mlflow()
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "rango_anos": RANGO_ANOS, **MODEL_META}
+    registry = mlflow_tracker.get_model_registry()
+    return {
+        "status": "ok",
+        "rango_anos": RANGO_ANOS,
+        "model_version": registry.get("model_version"),
+        "mlflow_available": registry.get("mlflow_available"),
+        **MODEL_META,
+    }
+
+
+@app.get("/model/info")
+def model_info():
+    registry = mlflow_tracker.get_model_registry()
+    return {
+        "modelo": MODEL_META["modelo"],
+        "features": MODEL_META["features"],
+        "r2_cv": MODEL_META["r2_cv"],
+        "auc_cv": MODEL_META["auc_cv"],
+        "rmse": MODEL_META["rmse"],
+        "mlflow_tracking_uri": mlflow_tracker.MLFLOW_TRACKING_URI,
+        "mlflow_experiment": mlflow_tracker.MLFLOW_EXPERIMENT_NAME,
+        "mlflow_model_name": mlflow_tracker.MLFLOW_MODEL_NAME,
+        "model_version": registry.get("model_version"),
+        "run_id": registry.get("run_id"),
+        "experiment_id": registry.get("experiment_id"),
+        "mlflow_available": registry.get("mlflow_available"),
+    }
 
 
 def _parse_input(file: UploadFile | None, riesgos: str | None) -> pd.DataFrame:
