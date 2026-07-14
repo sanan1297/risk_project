@@ -8,7 +8,7 @@ graph TB
     subgraph Backend["Backend — FastAPI (backend/)"]
         API[main.py<br/>REST API]
         FE[feature_engineering.py<br/>Agregación de riesgos → 35 features]
-        PREDICT[predictor.py<br/>SVR RBF R² 0.417 + Logistic AUC 0.673]
+        PREDICT[predictor.py<br/>SVR RBF R² CV 0.068 + Logistic AUC 0.673]
         QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
         HISTDB[history.py<br/>SQLite CRUD + resultado_json MC]
         TRAIN[training_stats.py<br/>351 contratos, R², coeficientes]

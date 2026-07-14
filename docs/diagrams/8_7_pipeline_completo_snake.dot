@@ -44,7 +44,7 @@ digraph G {
 
     { rank=same; M; N; O; }
     M [label="Feature\nEngineering\n219 → 35 features"];
-    N [label="SVR RBF + Logistic\nR² 0.417 · AUC 0.673"];
+    N [label="SVR RBF + Logistic\nR² CV 0.068 · AUC 0.673"];
     O [label="svr_regressor.pkl\npermutation_imp.csv"];
     M -> N -> O [weight=100];
     O -> P;

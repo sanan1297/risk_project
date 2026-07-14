@@ -12,7 +12,7 @@ graph LR
     K --> L[normalizar.py]
     L --> M[matriz_clean.csv<br/>351 contratos]
     M --> N["Feature Engineering<br/>219 features → 35 (30 TF-IDF + 5 rango)"]
-    N --> O["Modelo SVR RBF + Logistic<br/>R² 0.417 full · AUC 0.673<br/>350 contratos"]
+    N --> O["Modelo SVR RBF + Logistic<br/>R² CV 0.068 (full 0.417) · AUC 0.673<br/>350 contratos"]
     O --> P[svr_regressor.pkl<br/>permutation_importance.csv]
     P --> Q[FastAPI Backend<br/>/predict + /predict/montecarlo]
     Q --> Q2[quantitative_analysis.py<br/>MC + Tornado + Desglose]

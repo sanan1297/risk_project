@@ -22,7 +22,7 @@ graph TB
     L --> M[Feature Engineering<br/>219 → 35 features]
     subgraph R5[" "]
         direction LR
-        M --> N[SVR RBF + Logistic<br/>R² 0.417 · AUC 0.673] --> O[svr_regressor.pkl<br/>permutation_importance.csv]
+        M --> N[SVR RBF + Logistic<br/>R² CV 0.068 · AUC 0.673] --> O[svr_regressor.pkl<br/>permutation_importance.csv]
     end
     O --> P[FastAPI Backend<br/>/predict + /predict/montecarlo]
     subgraph R6[" "]

@@ -443,7 +443,7 @@ risk_project/
 ├── frontend/
 │   └── streamlit_app.py          # App Streamlit (~1150 líneas)
 ├── models/
-│   ├── svr_regressor.pkl         # SVR campeón (R² 0.417 full, C=10, gamma=scale)
+│   ├── svr_regressor.pkl         # SVR campeón (R² CV 0.068, C=10, gamma=scale)
 │   ├── classifier.pkl            # LogisticRegression (AUC 0.673)
 │   ├── ridge_reference.pkl       # Ridge de referencia (coeficientes lineales)
 │   ├── permutation_importance.csv# Importancia global del SVR (10 reps)
@@ -498,7 +498,7 @@ Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `
 
 ### 11.3 Resultados Grupo A — Prueba de Sanidad
 
-Modelo SVR con 35 features (30 TF-IDF + 5 rango: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio). R² full: 0.417, AUC: 0.673.
+Modelo SVR con 35 features (30 TF-IDF + 5 rango: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio). R² CV: 0.068, R² full (in-sample): 0.417, AUC: 0.673.
 
 | Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -580,7 +580,7 @@ Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 20
 | 2026-07-08 | Corrección: training_stats usaba pool SECOP I (1,560) en vez de contratos reales de entrenamiento (350) |
 | 2026-07-09 | Re-entreno: se añadió `tfidf_obra`, eliminó `tfidf_cualquier`. Ridge R² 0.103→0.149, AUC 0.639→0.662 |
 | 2026-07-09 | Análisis cuantitativo: Monte Carlo (1000 iter, ruido σ=RMSE_var), tornado por tipo, desglose individual |
-| 2026-07-11 | Migración a rango de fechas (anio_inicio/anio_fin/ipc_acumulado/trm_promedio). Ridge no capturó no-linealidades (R² CV=0.066). **SVR RBF nuevo campeón** (R² CV=0.072, AUC=0.673). Permutation importance como interpretabilidad (SHAP incompatible con numba+numpy) |
+| 2026-07-11 | Migración a rango de fechas (anio_inicio/anio_fin/ipc_acumulado/trm_promedio). Ridge no capturó no-linealidades (R² CV=0.066). **SVR RBF nuevo campeón** (R² CV=0.068, AUC=0.673). Permutation importance como interpretabilidad (SHAP incompatible con numba+numpy) |
 | 2026-07-11 | RMSE variable por n_riesgos (12/16/20/24 pp). Validación: MAE=10.5 pp, 7/10 aciertos |
 | 2026-07-13 | Descarga SECOP II activos: 7,422 contratos no terminados >= $1,000M + Obra + Inversión. Script: `buscar_activos_secop2.py` |
 | 2026-07-13 | **Grupo C**: C-365 Puente Aranda ($477.8B, activo). SVR=27.5%, ALTO RIESGO. Primer caso de predicción a futuro sin sobrecosto real |

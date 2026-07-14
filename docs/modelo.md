@@ -142,12 +142,12 @@ Ridge con año único funcionaba porque el año era un proxy categórico simple.
 
 Se evaluó SVR (Support Vector Regression) con kernel RBF como alternativa no lineal, usando los mismos 5 folds de validación cruzada:
 
-| Modelo | R² CV (10-fold) | AUC CV | RMSE |
-|---|---|---|---|
-| **SVR (kernel RBF, C=10, gamma=scale)** | **0.072** | **0.673** | **17.1 pp** |
+| Modelo | R² CV (5-fold) | AUC CV | RMSE |
+|---|---|---|---|---|
+| **SVR (kernel RBF, C=10, gamma=scale)** | **0.068** | **0.673** | **17.1 pp** |
 | Ridge (referencia) | 0.066 | 0.650 | 16.0 pp |
 
-**R² full en entrenamiento:** 0.417 (SVR) vs 0.149 (Ridge año único).
+**R² full (in-sample):** 0.417 (SVR) vs 0.149 (Ridge año único). El R² CV (0.068) es la métrica real de generalización.
 
 SVR superó a Ridge en R² CV (+0.006) y AUC (+0.023). Aunque el RMSE nominal es más alto (17.1 vs 16.0), esto se debe a que SVR optimiza error epsilon-insensitive, no MSE como Ridge.
 
@@ -164,7 +164,7 @@ SVR superó a Ridge en R² CV (+0.006) y AUC (+0.023). Aunque el RMSE nominal es
 | v2 (Jul 2026) | 33 (año único) | Ridge | 0.103 | 0.103 | ~0.639 | 15.6 | Campeón inicial |
 | v3 (Jul 2026) | 33 (año único) | Ridge | **0.149** | — | **0.662** | 16.0 | Re-entreno TF-IDF |
 | v4a (Jul 2026) | 35 (rango) | Ridge | 0.417 | 0.066 | 0.650 | 16.2 | **Descartado** |
-| v4b (Jul 2026) | 35 (rango) | **SVR RBF** | **0.417** | **0.072** | **0.673** | **17.1** | **Campeón final** |
+| v4b (Jul 2026) | 35 (rango) | **SVR RBF** | **0.417** | **0.068** | **0.673** | **17.1** | **Campeón final** |
 
 ---
 
@@ -231,8 +231,8 @@ SHAP requiere numba, incompatible con numpy >=2.5 (Python 3.14). Se usó permuta
 
 | Criterio | Resultado |
 |---|---|
-| R² (full training) | **0.417** |
-| R² CV (10-fold) | **0.072 ± 0.097** |
+| R² CV (5-fold) | **0.068** |
+| R² (full training / in-sample) | 0.417 |
 | AUC CV (clasificador) | **0.673** |
 | RMSE | **17.1 pp** |
 | Features | **35 (30 TF-IDF + 5 rango)** |
@@ -240,7 +240,7 @@ SHAP requiere numba, incompatible con numpy >=2.5 (Python 3.14). Se usó permuta
 
 ### Justificación para la tesis
 
-> "El modelo SVR con kernel RBF, entrenado con 35 features (30 TF-IDF + 5 de rango de fechas con IPC acumulado compuesto y TRM promedio), fue seleccionado como modelo campeón tras superar a Ridge en R² CV (0.072 vs 0.066) y AUC (0.673 vs 0.650). La migración de año único a rango de fechas, aunque metodológicamente necesaria para modelar proyectos multi-anuales, deterioró el rendimiento de Ridge (lineal), que no pudo capturar las relaciones no lineales entre duración, inflación compuesta y tipo de cambio. SVR, gracias a su kernel RBF, sí logró modelar estas interacciones. La interpretabilidad se logra mediante permutation importance global y coeficientes Ridge de referencia, aunque la explicación local por contrato queda como trabajo futuro."
+> "El modelo SVR con kernel RBF, entrenado con 35 features (30 TF-IDF + 5 de rango de fechas con IPC acumulado compuesto y TRM promedio), fue seleccionado como modelo campeón tras superar a Ridge en R² CV (0.068 vs 0.066) y AUC (0.673 vs 0.650). La migración de año único a rango de fechas, aunque metodológicamente necesaria para modelar proyectos multi-anuales, deterioró el rendimiento de Ridge (lineal), que no pudo capturar las relaciones no lineales entre duración, inflación compuesta y tipo de cambio. SVR, gracias a su kernel RBF, sí logró modelar estas interacciones. La interpretabilidad se logra mediante permutation importance global y coeficientes Ridge de referencia, aunque la explicación local por contrato queda como trabajo futuro."
 
 ### Modelos descartados en la fase final
 

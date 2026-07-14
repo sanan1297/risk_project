@@ -10,24 +10,24 @@ SECOP I/II API → Extracción → Matrices de Riesgo (PDF → LLM → CSV)
                                         ↓
                         Feature Engineering (351 contratos, 35 features)
                                         ↓
-                          SVR RBF (R² 0.417 full, AUC 0.673) + Monte Carlo
+                           SVR RBF (R² CV 0.068, AUC 0.673) + Monte Carlo
                                         ↓
                               Streamlit App (Dashboard + Predicción + Historial)
 ```
 
-El pipeline descarga contratos de obra pública desde las APIs de SECOP, extrae sus matrices de riesgo, entrena un modelo **SVR con kernel RBF** para estimar el sobrecosto porcentual usando **35 features (30 TF-IDF + 5 de rango de fechas)**, y despliega un dashboard interactivo con análisis cualitativo y cuantitativo.
+El pipeline descarga contratos de obra pública desde las APIs de SECOP, extrae sus matrices de riesgo, entrena un modelo **SVR con kernel RBF** para estimar el sobrecosto porcentual usando **35 features (30 TF-IDF + 5 de rango de fechas)**, y despliega un dashboard interactivo con análisis cualitativo y cuantitativo. El R² CV (5-fold) es de **0.068**, y el R² in-sample (full training) de **0.417**.
 
 ## Resultados del Modelo
 
-| Métrica | Valor |
-|---|---|
-| Modelo | **SVR (kernel RBF, C=10, gamma=scale)** |
-| R² (full training) | **0.417** |
-| R² CV (10-fold) | **0.072** |
-| AUC (LogisticRegression CV) | **0.673** |
-| RMSE | **17.1 pp** |
-| Features | **35 (30 TF-IDF + 5 rango fechas)** |
-| Interpretabilidad | **Permutation importance (10 reps) + Ridge referencia** |
+| Métrica | Valor | Nota |
+|---|---|---|---|
+| Modelo | **SVR (kernel RBF, C=10, gamma=scale)** | |
+| **R² CV (5-fold)** | **0.068** | **Métrica real de generalización** |
+| R² (full training) | 0.417 | In-sample (entrena y predice sobre los mismos datos) |
+| AUC (LogisticRegression CV) | **0.673** | |
+| RMSE | **17.1 pp** | |
+| Features | **35 (30 TF-IDF + 5 rango fechas)** | |
+| Interpretabilidad | **Permutation importance (10 reps) + Ridge referencia** | |
 
 ### Arquitectura de dos capas
 
@@ -42,7 +42,7 @@ El modelo pasó por 3 fases antes de llegar a SVR:
 |---|---|---|---|---|
 | v1–v3 | **Ridge** | 33 (año único) | **0.149** | Funcionaba con año único, pero forzaba todos los contratos a un solo año |
 | v4a | **Ridge** (rango) | 35 (rango fechas) | 0.066 CV | **No funcionó** — Ridge no captura relaciones no lineales entre duración, IPC compuesto y TRM |
-| **v4b** | **SVR RBF** | 35 (rango fechas) | **0.072 CV** | **Campeón final** — kernel RBF sí modela las no-linealidades del rango temporal |
+| **v4b** | **SVR RBF** | 35 (rango fechas) | **0.068 CV** | **Campeón final** — kernel RBF sí modela las no-linealidades del rango temporal |
 
 ### Mejora: RMSE Variable por Complejidad
 
@@ -88,7 +88,7 @@ risk_project/
 ├── frontend/
 │   └── streamlit_app.py          # App Streamlit (Dashboard + Predicción + Historial)
 ├── models/                       # Artefactos del modelo SVR
-│   ├── svr_regressor.pkl         # SVR (R² 0.417, C=10, gamma=scale)
+│   ├── svr_regressor.pkl         # SVR (R² CV 0.068, C=10, gamma=scale)
 │   ├── classifier.pkl            # LogisticRegression (AUC 0.673)
 │   ├── ridge_reference.pkl       # Ridge de referencia (coeficientes)
 │   ├── permutation_importance.csv# Importancia global (10 reps)
