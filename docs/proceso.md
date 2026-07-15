@@ -607,9 +607,9 @@ Contrato activo de SECOP II (no terminado). Matriz de 25 riesgos del IDU Bogotá
 
 | Contrato | Inicio | Fin | SVR | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
 |----------|-------|-----|-----|-------|--------|---------|------|-----|-----|-----|---------|
-| C-365 | 2022 | 2024 | 27.52% | 77.2% | ALTO RIESGO | 25 | 20 pp | 2.53% | 27.63% | 54.01% | 51.48 pp |
+| C-365 | 2023 | 2027 | 28.16% | 92.0% | ALTO RIESGO | 25 | 20 pp | 3.66% | 28.81% | 54.83% | 51.17 pp |
 
-**Interpretación:** SVR = 27.5%, clasificado como ALTO RIESGO (77.2%). En COP: sobrecosto esperado de $131.5 mil M (P50), con rango P10-P90 de $12.1 mil M a $258 mil M. Los riesgos más influyentes son indemnizaciones a terceros, variación de precios (global), y daños a la obra.
+**Interpretación:** SVR = 28.2%, clasificado como ALTO RIESGO (92.0%). En COP: sobrecosto esperado de $137.7 mil M (P50), con rango P10-P90 de $17.5 mil M a $262.0 mil M. Los riesgos más influyentes son indemnizaciones a terceros, variación de precios (global), y daños a la obra.
 
 ### 11.7 Resultados Grupo D — Sensibilidad Temporal (C-128 en 13 Rangos)
 
@@ -655,7 +655,7 @@ Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 20
 | 2026-07-11 | Migración a rango de fechas (anio_inicio/anio_fin/ipc_acumulado/trm_promedio). Ridge no capturó no-linealidades (R² CV=0.066). **SVR RBF nuevo campeón** (R² CV=0.068, AUC=0.673). Permutation importance como interpretabilidad (SHAP incompatible con numba+numpy) |
 | 2026-07-11 | RMSE variable por n_riesgos (12/16/20/24 pp). Validación: MAE=10.5 pp, 7/10 aciertos |
 | 2026-07-13 | Descarga SECOP II activos: 7,422 contratos no terminados >= $1,000M + Obra + Inversión. Script: `buscar_activos_secop2.py` |
-| 2026-07-13 | **Grupo C**: C-365 Puente Aranda ($477.8B, activo). SVR=27.5%, ALTO RIESGO. Primer caso de predicción a futuro sin sobrecosto real |
+| 2026-07-13 | **Grupo C**: C-365 Puente Aranda ($477.8B, activo). SVR=28.2%, ALTO RIESGO. Primer caso de predicción a futuro sin sobrecosto real |
 | 2026-07-13 | **Grupo D**: Prueba temporal C-128 en 13 rangos (2010-2024). Variación SVR=2.2 pp. La matriz de riesgos domina sobre features macro |
 | 2026-07-13 | Automatización de pruebas: script `run_c128_temporal.py` ejecuta 13 predicciones + MC vía API y guarda resultados en CSV |
 | 2026-07-14 | **Contenerización**: Dockerfile + docker-compose.yml (3 servicios: mlflow, backend, frontend). Variables de entorno configurables. Volúmenes persistentes. |

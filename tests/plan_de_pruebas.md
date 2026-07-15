@@ -200,13 +200,13 @@ Contrato C-365 (Puente Aranda / Troncal Calle 13, IDU Bogotá) está en ejecuci�
 
 | Contrato | Inicio | Fin | SVR | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
 |----------|-------|-----|-----|-------|--------|---------|------|-----|-----|-----|---------|
-| C-365 | 2022 | 2024 | 27.52% | 77.2% | 🔴 ALTO RIESGO | 25 | 20 pp | 2.53% | 27.63% | 54.01% | 51.48 pp |
+| C-365 | 2023 | 2027 | 28.16% | 92.0% | 🔴 ALTO RIESGO | 25 | 20 pp | 3.66% | 28.81% | 54.83% | 51.17 pp |
 
 ### 9.4 Clasificación RMSE
 
 Con 25 riesgos, C-365 entra en la categoría **"Complejos" (21–30 riesgos)** → RMSE = **20 pp**.
 
-**Interpretación:** El modelo predice un sobrecosto central de **27.5%** para el Puente Aranda, clasificándolo como **ALTO RIESGO** (77.2% de probabilidad). Con P90-P10 de 51.5 pp, la incertidumbre es considerable — desde un sobrecosto leve (P10=2.5%) hasta más de la mitad del valor del contrato (P90=54%). En COP: el sobrecosto esperado es de **$131.5 mil M** (P50), con un rango P10-P90 de **$12.1 mil M a $258 mil M**. Los riesgos que más contribuyen son indemnizaciones a terceros, variación de precios, y daños a la obra.
+**Interpretación:** El modelo predice un sobrecosto central de **28.2%** para el Puente Aranda, clasificándolo como **ALTO RIESGO** (92.0% de probabilidad). Con P90-P10 de 51.2 pp, la incertidumbre es considerable — desde un sobrecosto leve (P10=3.7%) hasta más de la mitad del valor del contrato (P90=54.8%). En COP: el sobrecosto esperado es de **$137.7 mil M** (P50), con un rango P10-P90 de **$17.5 mil M a $262.0 mil M**. Los riesgos que más contribuyen son indemnizaciones a terceros, variación de precios, y daños a la obra.
 
 ---
 
