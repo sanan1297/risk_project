@@ -296,7 +296,7 @@ Exposición REST con FastAPI. El frontend apunta a `http://localhost:8003` (work
 | Método | Endpoint | Parámetros | Respuesta | Propósito |
 |--------|----------|-------------|-----------|-----------|
 | `POST` | `/predict` | CSV file o texto + parámetros `(anio_inicio, anio_fin, ipc_override, trm_override)` | `PrediccionSalida` con factores, alerta, history_id | Ejecutar predicción sobre 1+N contratos con rango de fechas |
-| `POST` | `/predict/montecarlo` | CSV + `(anio_inicio, anio_fin, ipc_override, trm_override, n_iteraciones, incluir_ruido, valor_inicial, history_id)` | `MonteCarloSalida` con percentiles, stats, histograma, tornado, desglose (en % y COP) | Simulación Monte Carlo + análisis cuantitativo por tipo y por riesgo individual |
+| `POST` | `/predict/montecarlo` | CSV + `(anio_inicio, anio_fin, ipc_override, trm_override, n_iteraciones, incluir_ruido, valor_inicial, history_id)` | `MonteCarloSalida` con percentiles, stats, histograma, tornado, desglose SHAP (en % y COP) | Simulación Monte Carlo + análisis cuantitativo por tipo y desglose por riesgo vía SHAP |
 | `GET` | `/history` | `page=1`, `page_size=15` | `{"data": [...], "total": N, "page": P, "paginas": M}` | Listar historial paginado |
 | `GET` | `/history/{id}` | — | Cualitativo + `resultado_json` completo | Obtener predicción individual con MC |
 | `GET` | `/history/{id}/resultados` | — | `resultado_json` completo del MC | Obtener solo resultados cuantitativos |
@@ -314,7 +314,7 @@ La app es single-page con navegación vía `?view=` en query params:
 | Vista | Ruta | Función | Contenido |
 |-------|------|---------|-----------|
 | Dashboard | `?view=dashboard` | `_render_dashboard()` | 2 tabs: "Uso del Modelo" (KPI cards, evolución, distribución alertas) y "Entrenamiento" (KPI cards, top features, tabla de riesgos por clase) |
-| Predicción | `?view=predict` | `_render_predict()` | Selector CSV/texto, parámetros en sidebar, análisis cualitativo (alerta + factores) + cuantitativo (Monte Carlo con 1000 iteraciones, tornado por tipo de riesgo con swing real del modelo, histograma, desglose individual por peso prob×imp, valores en % y COP) |
+| Predicción | `?view=predict` | `_render_predict()` | Selector CSV/texto, parámetros en sidebar, análisis cualitativo (alerta + factores) + cuantitativo (Monte Carlo con 1000 iteraciones, tornado por tipo de riesgo con swing real del modelo, histograma, desglose individual vía SHAP, valores en % y COP) |
 | Historial | `?view=history` | `_render_history()` | Lista paginada (15/page) con contrato, alerta, Ridge, Prob., Real, botón eliminar, formulario de validación inline, y botón "Ver análisis completo" (expande inline el MC + cualitativo) |
 
 ### 8.4 Flujo de Datos — Predicción
@@ -508,7 +508,7 @@ risk_project/
 │   ├── predictor.py              # Carga SVR + LogisticRegression (35 features, permutation importance)
 │   ├── mlflow_tracker.py         # Carga de modelos desde MLflow Model Registry (fallback local)
 │   ├── feature_engineering.py    # Agregación de riesgos → 35 features (rango fechas: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio)
-│   ├── quantitative_analysis.py  # Monte Carlo (1000 iter, RMSE variable por n_riesgos), tornado, desglose
+│   ├── quantitative_analysis.py  # Monte Carlo (1000 iter, RMSE variable por n_riesgos), tornado, desglose SHAP
 │   ├── history.py                # CRUD SQLite + stats + almacenamiento resultado_json del MC
 │   ├── training_stats.py         # Estadísticas del dataset de entrenamiento (351 contratos)
 │   └── feature_labels.py         # Labels legibles para features técnicas
@@ -522,7 +522,8 @@ risk_project/
 │   ├── scaler.pkl                # StandardScaler ajustado
 │   ├── feature_names.pkl         # Lista de 35 feature names
 │   ├── tfidf_vectorizer.pkl      # Vectorizador TF-IDF
-│   └── ipc_trm.pkl               # Diccionario IPC/TRM por año
+│   ├── ipc_trm.pkl               # Diccionario IPC/TRM por año
+│   └── shap_background.pkl       # 100 contratos de background para SHAP KernelExplainer
 ├── scripts/
 │   └── train_final_model.py      # Entrenamiento reproducible del modelo final
 ├── docs/
@@ -660,3 +661,4 @@ Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 20
 | 2026-07-13 | Automatización de pruebas: script `run_c128_temporal.py` ejecuta 13 predicciones + MC vía API y guarda resultados en CSV |
 | 2026-07-14 | **Contenerización**: Dockerfile + docker-compose.yml (3 servicios: mlflow, backend, frontend). Variables de entorno configurables. Volúmenes persistentes. |
 | 2026-07-14 | **Trazabilidad MLflow**: servidor MLflow 3.14, experimento `risk-predictor`, model registry `risk-predictor-svr`. Backend carga modelo desde MLflow con fallback local. Endpoint `GET /model/info`. Entrenamiento registra params, metrics y artifacts. |
+| 2026-07-16 | **Desglose SHAP**: se reemplazó la heurística `contribución = pred_base × (prob×imp / Σ prob×imp)` por valores Shapley locales vía `shap.KernelExplainer` (1000 samples, 100 contratos background). Cada riesgo recibe su contribución real según lo que el SVR aprendió de las 35 features, mapeando TF-IDF, proporciones categóricas y variables macro a los riesgos individuales que las generaron. |

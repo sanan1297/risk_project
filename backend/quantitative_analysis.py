@@ -1,8 +1,16 @@
+import re
+from pathlib import Path
+from functools import lru_cache
+
+import joblib
 import numpy as np
 import pandas as pd
+import shap
 
 from .predictor import load as load_model
 from .feature_engineering import aggregate_risks
+
+ROOT = Path(__file__).resolve().parent.parent
 
 VAR_FEATURE_NAMES = [
     "prob_promedio",
@@ -47,6 +55,193 @@ def _cop(valor, vi):
     if vi is None:
         return None
     return round(valor * vi / 100, 2)
+
+
+@lru_cache(maxsize=1)
+def _load_shap_background(n_samples: int = 100) -> pd.DataFrame:
+    """Load SHAP background data: 100 random contracts from training set."""
+    cache_path = ROOT / "models" / "shap_background.pkl"
+    if cache_path.exists():
+        return joblib.load(cache_path)
+
+    matriz = pd.read_csv(ROOT / "docs" / "matriz_clean.csv", encoding="utf-8-sig")
+    macro = pd.read_csv(ROOT / "docs" / "contratos_macro.csv")
+
+    rng = np.random.default_rng(42)
+    contratos = matriz["id_contrato"].unique()
+    sampled = list(rng.choice(contratos, size=min(n_samples, len(contratos)), replace=False))
+
+    macro_map = macro.set_index("id_contrato")[["anio_inicio", "anio_fin"]].to_dict("index")
+    feat_names: list[str] = joblib.load(ROOT / "models" / "feature_names.pkl")
+
+    rows: list[pd.DataFrame] = []
+    for cid in sampled:
+        sub = matriz[matriz["id_contrato"] == cid].copy()
+        feats = macro_map.get(cid, {"anio_inicio": 2022, "anio_fin": 2022})
+        feat = aggregate_risks(sub, anio_inicio=feats["anio_inicio"], anio_fin=feats["anio_fin"])
+        rows.append(feat)
+
+    bg = pd.concat(rows, ignore_index=True)
+    for c in feat_names:
+        if c not in bg.columns:
+            bg[c] = 0.0
+    bg = bg[feat_names]
+
+    joblib.dump(bg, cache_path)
+    return bg
+
+
+@lru_cache(maxsize=1)
+def _get_shap_explainer():
+    """Get or create cached SHAP KernelExplainer for the SVR model."""
+    regressor, _, scaler, feature_names = load_model()
+    background = _load_shap_background()
+    bg_raw = background[feature_names].values.astype(np.float64)
+
+    def predict_fn(X: np.ndarray) -> np.ndarray:
+        X = np.asarray(X, dtype=np.float64)
+        return regressor.predict(scaler.transform(X))
+
+    return shap.KernelExplainer(predict_fn, bg_raw)
+
+
+_PROP_PREFIX_TO_COL = {
+    "tipo": "tipo",
+    "clas": "clase",
+    "asig": "asignacion",
+    "fuen": "fuente_riesgo",
+    "etap": "etapa",
+    "cate": "categoria",
+}
+
+_SHARED_WEIGHTED = {
+    "prob_promedio", "prob_std", "imp_promedio",
+    "interaccion_prob_x_impacto", "prob_min", "prob_max",
+    "imp_min", "imp_max", "prob_rango", "imp_rango",
+    "val_promedio", "suma_valoracion", "suma_probabilidad",
+    "suma_impacto", "val_std", "val_min", "val_max", "val_rango",
+    "val_p25", "val_p75", "prob_p25", "prob_p75", "imp_p25", "imp_p75",
+}
+
+_EQUAL_SPLIT = {
+    "n_riesgos", "anio_inicio", "anio_fin", "duracion",
+    "ipc_acumulado", "trm_promedio", "valor_inicial",
+}
+
+
+def _map_shap_to_risks(
+    shap_vals: np.ndarray,
+    df_contrato: pd.DataFrame,
+    feature_names: list[str],
+    probs: np.ndarray,
+    imps: np.ndarray,
+) -> np.ndarray:
+    n = len(df_contrato)
+    contributions = np.zeros(n)
+    prod = probs * imps
+    prod_total = prod.sum()
+    if prod_total <= 0:
+        prod_total = float(n)
+        weq = 1.0
+    else:
+        weq = prod / prod_total
+
+    for idx, feat_name in enumerate(feature_names):
+        sv = shap_vals[idx]
+        if sv == 0.0:
+            continue
+
+        if feat_name in _EQUAL_SPLIT:
+            contributions[:] += sv / n
+
+        elif feat_name in _SHARED_WEIGHTED:
+            contributions += sv * weq
+
+        elif feat_name.startswith("prop_"):
+            rest = feat_name[5:]
+            parts = rest.split("_", 1)
+            if len(parts) != 2:
+                contributions[:] += sv / n
+                continue
+            prefix, value = parts
+            col_name = _PROP_PREFIX_TO_COL.get(prefix)
+            if col_name is None or col_name not in df_contrato.columns:
+                contributions[:] += sv / n
+                continue
+            mask = (df_contrato[col_name].astype(str).str.strip().str.lower() == value).values
+            n_mask = mask.sum()
+            if n_mask == 0:
+                contributions[:] += sv / n
+            else:
+                prod_mask = prod[mask]
+                ptotal = prod_mask.sum()
+                if ptotal > 0:
+                    contributions[mask] += sv * (prod_mask / ptotal)
+                else:
+                    contributions[mask] += sv / n_mask
+
+        elif feat_name.startswith("tfidf_"):
+            word = feat_name[6:]
+            descs = df_contrato["descripcion_riesgo"].astype(str).str.lower()
+            contains = np.array([word in d for d in descs])
+            n_contains = contains.sum()
+            if n_contains == 0:
+                contributions[:] += sv / n
+            else:
+                prod_cont = prod[contains]
+                ptotal = prod_cont.sum()
+                if ptotal > 0:
+                    contributions[contains] += sv * (prod_cont / ptotal)
+                else:
+                    contributions[contains] += sv / n_contains
+
+        else:
+            contributions[:] += sv / n
+
+    return contributions
+
+
+def _desglose_por_riesgo_shap(
+    df_contrato: pd.DataFrame,
+    df_feat: pd.DataFrame,
+    feature_names: list[str],
+    idx_var: list[int],
+    scaler,
+    regressor,
+    pred_base: float,
+) -> list[dict]:
+    n = len(df_contrato)
+    probs = df_contrato["probabilidad"].values.astype(float)
+    imps = df_contrato["impacto"].values.astype(float)
+
+    explainer = _get_shap_explainer()
+
+    X_raw = df_feat[feature_names].values.astype(np.float64).reshape(1, -1)
+    shap_values = explainer.shap_values(X_raw, nsamples=1000)
+
+    if shap_values.ndim == 2:
+        shap_vals = shap_values[0]
+    else:
+        shap_vals = shap_values
+
+    per_risk = _map_shap_to_risks(shap_vals, df_contrato, feature_names, probs, imps)
+    per_risk += explainer.expected_value / n
+
+    prod_total = (probs * imps).sum() or 1.0
+    items = []
+    for i in range(n):
+        peso = (probs[i] * imps[i]) / prod_total
+        items.append({
+            "riesgo": str(df_contrato.iloc[i].get("descripcion_riesgo", f"Riesgo {i + 1}")),
+            "tipo": str(df_contrato.iloc[i].get("tipo", "")),
+            "categoria": str(df_contrato.iloc[i].get("categoria", "")),
+            "probabilidad": int(probs[i]),
+            "impacto": int(imps[i]),
+            "peso_contribucion": round(peso, 4),
+            "contribucion_porcentaje": round(per_risk[i], 2),
+        })
+    items.sort(key=lambda x: x["contribucion_porcentaje"], reverse=True)
+    return items
 
 
 def compute(
@@ -140,9 +335,8 @@ def compute(
             t2["swing"] = _cop(t["swing"], vi)
             tornado_cop.append(t2)
 
-    riesgo_cuantitativo = _desglose_por_riesgo(
-        df_contrato, probs_orig, imps_orig,
-        df_feat, feature_names, idx_var,
+    riesgo_cuantitativo = _desglose_por_riesgo_shap(
+        df_contrato, df_feat, feature_names, idx_var,
         scaler, regressor, pred_base,
     )
     riesgo_cuantitativo_cop = None
@@ -212,25 +406,4 @@ def _tornado(
     return items
 
 
-def _desglose_por_riesgo(
-    df_contrato, probs_orig, imps_orig,
-    df_feat, feature_names, idx_var,
-    scaler, regressor, pred_base,
-):
-    n = len(df_contrato)
-    items = []
-    prod_total = (probs_orig * imps_orig).sum()
-    for i in range(n):
-        peso = (probs_orig[i] * imps_orig[i]) / prod_total if prod_total > 0 else 0
-        contribucion = pred_base * peso
-        items.append({
-            "riesgo": str(df_contrato.iloc[i].get("descripcion_riesgo", f"Riesgo {i + 1}")),
-            "tipo": str(df_contrato.iloc[i].get("tipo", "")),
-            "categoria": str(df_contrato.iloc[i].get("categoria", "")),
-            "probabilidad": int(probs_orig[i]),
-            "impacto": int(imps_orig[i]),
-            "peso_contribucion": round(peso, 4),
-            "contribucion_porcentaje": round(contribucion, 2),
-        })
-    items.sort(key=lambda x: x["contribucion_porcentaje"], reverse=True)
-    return items
+

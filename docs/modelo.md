@@ -208,7 +208,44 @@ Se entrenó un Ridge (alpha=244) exclusivamente como referencia de coeficientes 
 | `tfidf_insumos` | −0.93 | Insumos especificados |
 | `imp_promedio` | −0.80 | Impacto promedio alto (contratos más cuidadosos) |
 
-> **Nota:** La interpretabilidad es global (permutation importance sobre todo el dataset), no local por contrato. Esto se documenta como limitación del modelo actual.
+### 3.3 SHAP — Interpretabilidad Local por Riesgo
+
+Además de la interpretabilidad global, se implementó **interpretabilidad local** vía `shap.KernelExplainer` para desglosar la predicción de cada contrato entre sus riesgos individuales.
+
+**Problema original:**
+El desglose inicial usaba una heurística independiente del modelo:
+```
+contribución(i) = pred_base × (prob_i × imp_i) / Σ(prob × imp)
+```
+Esto repartía la predicción proporcionalmente a `prob×imp` sin considerar qué features del SVR realmente causaban esa predicción. Ignoraba TF-IDF, categorías, IPC, TRM y las no-linealidades del kernel RBF.
+
+**Solución SHAP:**
+Se reemplazó por valores Shapley locales que calculan la contribución de cada una de las 35 features a `pred_base`, y luego se mapean a los riesgos según:
+
+| Feature | Estrategia de mapeo |
+|---|---|
+| `prob_promedio`, `imp_promedio`, `interaccion_*` | Ponderado por `prob×imp` |
+| `prop_tipo_X`, `prop_cate_X`, `prop_fuen_X` | Solo riesgos con ese valor categórico |
+| `tfidf_palabra` | Riesgos cuya descripción contiene la palabra |
+| `duracion`, `ipc_acumulado`, `trm_promedio` | Split equitativo |
+
+**Ejemplo concreto (contrato de 3 riesgos):**
+
+| Riesgo | P | I | Heurística antes | SHAP ahora |
+|---|---|---|---|---|
+| problemas técnicos en ejecución obra | 2 | 3 | **3.19%** | **7.88%** |
+| retraso entrega materiales | 3 | 4 | **6.39%** | **6.05%** |
+| incremento precio insumos | 4 | 5 | **10.65%** | **6.31%** |
+
+El riesgo con P×I más bajo (2×3=6) pasó a ser el de mayor contribución. El SVR aprendió que palabras como "obra", "ejecución", "técnicos" y la categoría "medio" están asociadas a mayor sobrecosto en los 351 contratos de entrenamiento — algo que la heurística `prob×imp` no podía capturar.
+
+**Validación matemática:**
+```
+SHAP: ∑shap_vals + expected_value = -1.87% + 22.10% = 20.23% = pred_base ✅
+Desglose: ∑contribuciones = 20.24% ≈ 20.23% (error 0.01pp) ✅
+```
+
+**Rendimiento:** ~0.7s por contrato promedio (15 riesgos) con KernelExplainer + 1000 samples + 100 contratos background. Cacheados vía `lru_cache`.
 
 ---
 
@@ -220,8 +257,29 @@ Se aplicó `np.log1p(sobrecosto)` para estabilizar la cola larga. **Empeoró el 
 ### 4.2 Interacciones sintéticas
 TRM × probabilidad, IPC × valor inicial, TRM × riesgo total. **No aportaron señal predictiva** y actuaron como ruido.
 
-### 4.3 SHAP no disponible
-SHAP requiere numba, incompatible con numpy >=2.5 (Python 3.14). Se usó permutation importance como alternativa.
+### 4.3 SHAP — Interpretabilidad Local por Riesgo
+Inicialmente SHAP no estaba disponible por incompatibilidad numba+numpy 2.5 (Python 3.13). Se corrigió fijando `numpy<2.5` en las dependencias. Se implementó un desglose por riesgo basado en `shap.KernelExplainer` con 1000 samples y 100 contratos de background.
+
+**Arquitectura del desglose SHAP:**
+1. Se calculan los valores Shapley para las 35 features del contrato
+2. Cada feature se mapea a los riesgos individuales según su naturaleza:
+   - `prob_promedio`, `imp_promedio`, `interacción` → ponderado por `prob×imp`
+   - `prop_tipo_*`, `prop_cate_*`, etc. → solo riesgos con ese valor categórico
+   - `tfidf_*` → riesgos cuya descripción contiene la palabra
+   - `duración`, `ipc_acumulado`, `trm_promedio` → split equitativo
+3. La suma de contribuciones `= pred_base` (error < 0.01pp con 1000 samples)
+
+**Reemplazo de la heurística anterior:**
+El código original usaba `contribución = pred_base × (prob_i × imp_i) / Σ(prob × imp)`, que es independiente del modelo — no reflejaba lo que el SVR realmente aprendió. SHAP sí captura las no-linealidades del kernel RBF, el efecto del texto (TF-IDF), y las interacciones entre variables macro y la matriz de riesgos.
+
+**Validación con datos sintéticos (Julio 2026):**
+| Método | ¿Refleja el modelo? | Error de caja |
+|---|---|---|
+| Heurística `prob×imp` | ❌ No | — |
+| SHAP nsamples=200 | ✅ Sí | ~0.03pp |
+| SHAP nsamples=1000 | ✅ Sí | **~0.01pp** |
+
+Tiempo de cómputo: ~0.7s por contrato promedio (15 riesgos) con nsamples=1000.
 
 ---
 
@@ -236,11 +294,11 @@ SHAP requiere numba, incompatible con numpy >=2.5 (Python 3.14). Se usó permuta
 | AUC CV (clasificador) | **0.673** |
 | RMSE | **17.1 pp** |
 | Features | **35 (30 TF-IDF + 5 rango)** |
-| Interpretabilidad | **Permutation importance (global) + Ridge referencia** |
+| Interpretabilidad | **SHAP (local, 1000 samples) + Permutation importance (global, 10 reps) + Ridge referencia** |
 
 ### Justificación para la tesis
 
-> "El modelo SVR con kernel RBF, entrenado con 35 features (30 TF-IDF + 5 de rango de fechas con IPC acumulado compuesto y TRM promedio), fue seleccionado como modelo campeón tras superar a Ridge en R² CV (0.068 vs 0.066) y AUC (0.673 vs 0.650). La migración de año único a rango de fechas, aunque metodológicamente necesaria para modelar proyectos multi-anuales, deterioró el rendimiento de Ridge (lineal), que no pudo capturar las relaciones no lineales entre duración, inflación compuesta y tipo de cambio. SVR, gracias a su kernel RBF, sí logró modelar estas interacciones. La interpretabilidad se logra mediante permutation importance global y coeficientes Ridge de referencia, aunque la explicación local por contrato queda como trabajo futuro."
+> "El modelo SVR con kernel RBF, entrenado con 35 features (30 TF-IDF + 5 de rango de fechas con IPC acumulado compuesto y TRM promedio), fue seleccionado como modelo campeón tras superar a Ridge en R² CV (0.068 vs 0.066) y AUC (0.673 vs 0.650). La migración de año único a rango de fechas, aunque metodológicamente necesaria para modelar proyectos multi-anuales, deterioró el rendimiento de Ridge (lineal), que no pudo capturar las relaciones no lineales entre duración, inflación compuesta y tipo de cambio. SVR, gracias a su kernel RBF, sí logró modelar estas interacciones. La interpretabilidad global se logra mediante permutation importance; la interpretabilidad local (por riesgo individual) se implementó vía SHAP KernelExplainer, reemplazando la heurística `prob×imp / Σ(prob×imp)` por valores Shapley que reflejan la contribución real de cada riesgo a la predicción del SVR."
 
 ### Modelos descartados en la fase final
 
@@ -262,3 +320,4 @@ SHAP requiere numba, incompatible con numpy >=2.5 (Python 3.14). Se usó permuta
 | 2026-07-09 | v2 | Re-entreno final. `tfidf_cualquier` → `tfidf_obra`. Ridge R² 0.149, AUC 0.662. |
 | 2026-07-11 | v3 | Migración a rango de fechas. Ridge descartado (R² CV=0.066). SVR nuevo campeón (R² CV=0.072, AUC=0.673). Permutation importance. RMSE variable. |
 | 2026-07-14 | v4 | Integración MLflow: experimentos, model registry, artifact store. Backend carga modelo desde MLflow con fallback local. |
+| 2026-07-16 | v5 | **Desglose SHAP**: reemplazo de heurística `prob×imp` por interpretabilidad local vía `shap.KernelExplainer` (1000 samples). Cada riesgo recibe su contribución real al sobrecosto estimado. numpy fijado a <2.5 por compatibilidad con numba. |

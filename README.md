@@ -27,12 +27,13 @@ El pipeline descarga contratos de obra pública desde las APIs de SECOP, extrae 
 | AUC (LogisticRegression CV) | **0.673** | |
 | RMSE | **17.1 pp** | |
 | Features | **35 (30 TF-IDF + 5 rango fechas)** | |
-| Interpretabilidad | **Permutation importance (10 reps) + Ridge referencia** | |
+| Interpretabilidad | **SHAP (KernelExplainer, 1000 samples) + Permutation importance** | |
 
-### Arquitectura de dos capas
+### Arquitectura de tres capas
 
 1. **SVR** — predicción central del sobrecosto % usando 35 features agregadas (promedios de prob/impacto, proporciones por tipo, TF-IDF, IPC acumulado compuesto, TRM promedio, duración)
 2. **Análisis cuantitativo** — Monte Carlo (1000 iteraciones, perturbación discreta ±1, ruido Gaussiano con **RMSE variable según complejidad del contrato**), Tornado por tipo, Desglose individual
+3. **Interpretabilidad local (SHAP)** — cada riesgo individual recibe su contribución real a `pred_base` vía valores Shapley sobre el SVR. Reemplaza la heurística anterior `peso = prob×imp / Σ(prob×imp)` que era independiente del modelo.
 
 ### Traza de la Investigación
 
@@ -81,7 +82,7 @@ risk_project/
 │   ├── schemas.py                # Pydantic models
 │   ├── predictor.py              # SVR + LogisticRegression (permutation importance)
 │   ├── feature_engineering.py    # Agregación de riesgos → 35 features (rango fechas)
-│   ├── quantitative_analysis.py  # Monte Carlo + Tornado + RMSE variable por n_riesgos
+│   ├── quantitative_analysis.py  # Monte Carlo + Tornado + SHAP desglose por riesgo
 │   ├── history.py                # SQLite CRUD + stats + resultado_json MC
 │   ├── training_stats.py         # Estadísticas de entrenamiento (351 contratos)
 │   ├── mlflow_tracker.py          # Carga de modelos desde MLflow (fallback local)
@@ -96,7 +97,8 @@ risk_project/
 │   ├── scaler.pkl                # StandardScaler
 │   ├── feature_names.pkl         # 35 feature names
 │   ├── tfidf_vectorizer.pkl      # Vectorizador TF-IDF
-│   └── ipc_trm.pkl               # IPC/TRM por año
+│   ├── ipc_trm.pkl               # IPC/TRM por año
+│   └── shap_background.pkl       # 100 contratos de background para SHAP KernelExplainer
 ├── scripts/
 │   ├── train_final_model.py      # Entrenamiento SVR reproducible
 │   └── compute_ipc_range.py      # Cálculo IPC acumulado + TRM promedio por rango
@@ -195,7 +197,7 @@ docker compose logs -f
 |---|---|---|
 | Backend | Python 3.12+, FastAPI, Uvicorn |
 | Frontend | Streamlit 1.59+, Plotly |
-| ML | scikit-learn (SVR, LogisticRegression, TF-IDF, Ridge referencia) |
+| ML | scikit-learn (SVR, LogisticRegression, TF-IDF, Ridge referencia), SHAP |
 | Trazabilidad | **MLflow** (experimentos + model registry + artifact store) |
 | Contenerización | **Docker Compose** (3 servicios: mlflow, backend, frontend) |
 | Almacenamiento | SQLite (predicciones + resultados MC), joblib/pickle (modelos) |
