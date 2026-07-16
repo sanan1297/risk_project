@@ -575,14 +575,14 @@ Modelo SVR con 35 features (30 TF-IDF + 5 rango: anio_inicio, anio_fin, duracion
 
 | Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| C-001 | 2018 | 2019 | 28.6% | 25.01% | −3.6 pp | 81.7% | ALTO RIESGO | 12 | 16 pp | 2.5% | 23.6% | 45.2% | 42.7 pp |
-| C-010 | 2018 | 2020 | 37.3% | 16.84% | −20.5 pp | 41.0% | RIESGO MODERADO | 20 | 16 pp | −2.9% | 16.4% | 37.4% | 40.4 pp |
-| C-017 | 2019 | 2022 | 53.1% | 33.16% | −19.9 pp | 91.7% | ALTO RIESGO | 18 | 16 pp | 12.3% | 32.6% | 53.6% | 41.3 pp |
-| C-043 | 2021 | 2022 | 2.2% | 28.54% | +26.3 pp | 80.7% | ALTO RIESGO | 22 | 20 pp | 2.4% | 28.9% | 54.7% | 52.3 pp |
-| C-128 | 2019 | 2021 | 30.4% | 26.31% | −4.1 pp | 66.9% | ALTO RIESGO | 15 | 16 pp | 5.3% | 25.8% | 46.6% | 41.3 pp |
+| C-001 | 2018 | 2019 | 28.6% | 25.01% | −3.6 pp | 81.7% | ALTO RIESGO | 12 | 16 pp | 3.0% | 24.3% | 44.9% | 41.9 pp |
+| C-010 | 2018 | 2020 | 37.3% | 16.84% | −20.5 pp | 41.0% | RIESGO MODERADO | 20 | 16 pp | −3.3% | 16.8% | 37.4% | 40.7 pp |
+| C-017 | 2019 | 2022 | 53.1% | 33.16% | −19.9 pp | 91.7% | ALTO RIESGO | 18 | 16 pp | 12.8% | 33.0% | 53.7% | 40.9 pp |
+| C-043 | 2021 | 2022 | 2.2% | 28.54% | +26.3 pp | 80.7% | ALTO RIESGO | 22 | 20 pp | 2.4% | 28.5% | 54.2% | 51.7 pp |
+| C-128 | 2019 | 2021 | 30.4% | 26.31% | −4.1 pp | 66.9% | ALTO RIESGO | 15 | 16 pp | 5.6% | 26.5% | 46.9% | 41.3 pp |
 
 **MAE:** 14.9 pp | **Aciertos:** 3/5  
-**Conclusión:** Tendencia a regresión a la media (C-010 subestimado, C-043 sobreestimado). La incertidumbre ahora varía según complejidad: C-043 (22 riesgos) tiene P90-P10 de 52.3 pp vs ~41 pp de contratos más simples.
+**Conclusión:** Tendencia a regresión a la media (C-010 subestimado, C-043 sobreestimado). La incertidumbre ahora varía según complejidad: C-043 (22 riesgos) tiene P90-P10 de 51.7 pp vs ~41 pp de contratos más simples.
 
 ### 11.4 Validación contra Notebook (histórico)
 
@@ -593,24 +593,24 @@ El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El mo
 | Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | C-360 | 2019 | 2019 | 10.14% | 15.55% | +5.4 pp | 21.4% | RIESGO MODERADO | 14 | 16 pp | −3.4% | 16.5% | 35.5% | 38.9 pp |
-| C-361 | 2022 | 2022 | 19.09% | 16.99% | −2.1 pp | 60.2% | ALTO RIESGO | 28 | 20 pp | −7.9% | 18.5% | 43.5% | 51.3 pp |
-| C-362 | 2021 | 2021 | 4.38% | 9.54% | +5.2 pp | 21.4% | RIESGO MODERADO | 27 | 20 pp | −15.9% | 10.5% | 35.0% | 50.9 pp |
-| C-363 | 2022 | 2022 | 7.20% | 15.13% | +7.9 pp | 36.8% | RIESGO MODERADO | 14 | 16 pp | −3.5% | 16.2% | 35.5% | 39.0 pp |
-| C-364 | 2023 | 2023 | 20.83% | 10.85% | −10.0 pp | 18.8% | RIESGO MODERADO | 34 | 24 pp | −19.8% | 12.0% | 45.5% | 65.4 pp |
+| C-361 | 2022 | 2022 | 19.09% | 16.99% | −2.1 pp | 60.2% | ALTO RIESGO | 28 | 20 pp | −8.5% | 17.7% | 43.4% | 51.9 pp |
+| C-362 | 2021 | 2021 | 4.38% | 9.54% | +5.2 pp | 21.4% | RIESGO MODERADO | 27 | 20 pp | −15.2% | 10.0% | 35.3% | 50.5 pp |
+| C-363 | 2022 | 2022 | 7.20% | 15.13% | +7.9 pp | 36.8% | RIESGO MODERADO | 14 | 16 pp | −4.4% | 16.2% | 36.4% | 40.8 pp |
+| C-364 | 2023 | 2023 | 20.83% | 10.85% | −10.0 pp | 18.8% | RIESGO MODERADO | 34 | 24 pp | −19.4% | 11.7% | 42.7% | 62.2 pp |
 
 **MAE:** 6.1 pp (< 20 pp ✅) | **Aciertos:** 4/5  
 **Tiempo de respuesta:** < 2s por contrato (< 5s ✅)  
-**Conclusión:** El SVR generaliza muy bien en datos no vistos (MAE 6.1 pp). C-364 (34 riesgos) tiene el intervalo más amplio (P90-P10=65.4 pp) por su RMSE de 24 pp, reflejando correctamente su alta complejidad.
+**Conclusión:** El SVR generaliza muy bien en datos no vistos (MAE 6.1 pp). C-364 (34 riesgos) tiene el intervalo más amplio (P90-P10=62.2 pp) por su RMSE de 24 pp, reflejando correctamente su alta complejidad.
 
 ### 11.6 Resultados Grupo C — Predicción a Futuro (C-365 Puente Aranda)
 
-Contrato activo de SECOP II (no terminado). Matriz de 25 riesgos del IDU Bogotá para la construcción de la intersección a desnivel de Puente Aranda (Troncal Calle 13). Valor: $477,834,784,322. Proyección: 2023-2027. Ejecutado el 2026-07-13 vía frontend.
+Contrato activo de SECOP II (no terminado). Matriz de 25 riesgos del IDU Bogotá para la construcción de la intersección a desnivel de Puente Aranda (Troncal Calle 13). Valor: $477,834,784,322. Proyección: 2023-2027. Ejecutado el 2026-07-16 vía frontend (5,000 iteraciones MC).
 
 | Contrato | Inicio | Fin | SVR | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
 |----------|-------|-----|-----|-------|--------|---------|------|-----|-----|-----|---------|
-| C-365 | 2023 | 2027 | 28.16% | 92.0% | ALTO RIESGO | 25 | 20 pp | 3.66% | 28.81% | 54.83% | 51.17 pp |
+| C-365 | 2023 | 2027 | 28.16% | 92.0% | ALTO RIESGO | 25 | 20 pp | 3.04% | 28.07% | 54.46% | 51.42 pp |
 
-**Interpretación:** SVR = 28.2%, clasificado como ALTO RIESGO (92.0%). En COP: sobrecosto esperado de $137.7 mil M (P50), con rango P10-P90 de $17.5 mil M a $262.0 mil M. Los riesgos más influyentes son indemnizaciones a terceros, variación de precios (global), y daños a la obra.
+**Interpretación:** SVR = 28.2%, clasificado como ALTO RIESGO (92.0%). En COP: sobrecosto esperado de $134.1 mil M (P50), con rango P10-P90 de $14.5 mil M a $260.2 mil M. Los riesgos más influyentes son indemnizaciones a terceros, variación de precios (global), y daños a la obra.
 
 ### 11.7 Resultados Grupo D — Sensibilidad Temporal (C-128 en 13 Rangos)
 
@@ -662,3 +662,4 @@ Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 20
 | 2026-07-14 | **Contenerización**: Dockerfile + docker-compose.yml (3 servicios: mlflow, backend, frontend). Variables de entorno configurables. Volúmenes persistentes. |
 | 2026-07-14 | **Trazabilidad MLflow**: servidor MLflow 3.14, experimento `risk-predictor`, model registry `risk-predictor-svr`. Backend carga modelo desde MLflow con fallback local. Endpoint `GET /model/info`. Entrenamiento registra params, metrics y artifacts. |
 | 2026-07-16 | **Desglose SHAP**: se reemplazó la heurística `contribución = pred_base × (prob×imp / Σ prob×imp)` por valores Shapley locales vía `shap.KernelExplainer` (1000 samples, 100 contratos background). Cada riesgo recibe su contribución real según lo que el SVR aprendió de las 35 features, mapeando TF-IDF, proporciones categóricas y variables macro a los riesgos individuales que las generaron. |
+| 2026-07-16 | **Re-ejecución completa**: 12 predicciones reprocesadas vía frontend Docker (C-001 a C-365) con 5000 iteraciones MC. Actualizados contratos_prueba.csv, README, docs/proceso.md, tests/plan_de_pruebas.md con nuevos percentiles MC. |

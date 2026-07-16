@@ -58,20 +58,21 @@ La incertidumbre del Monte Carlo ahora varía según la cantidad de riesgos del 
 
 ### Pruebas de Validación (Julio 2026)
 
-**10 contratos de prueba — MAE global: 10.5 pp — Aciertos de alerta: 7/10**
+**11 contratos de prueba (10 con validación real) — MAE global: 10.5 pp — Aciertos de alerta: 7/10**
 
 | Contrato | Real | SVR | Error | P50 | P90-P10 | RMSE | Alerta |
 |---|---|---|---|---|---|---|---|---|
-| C-001 | 28.6% | 25.01% | −3.6 | 23.6% | 42.7 pp | 16 | ALTO RIESGO ✅ |
-| C-010 | 37.3% | 16.84% | −20.5 | 16.4% | 40.4 pp | 16 | RIESGO MODERADO ❌ |
-| C-017 | 53.1% | 33.16% | −19.9 | 32.6% | 41.3 pp | 16 | ALTO RIESGO ✅ |
-| C-043 | 2.2% | 28.54% | +26.3 | 28.9% | 52.3 pp | 20 | ALTO RIESGO ❌ |
-| C-128 | 30.4% | 26.31% | −4.1 | 25.8% | 41.3 pp | 16 | ALTO RIESGO ✅ |
+| C-001 | 28.6% | 25.01% | −3.6 | 24.3% | 41.9 pp | 16 | ALTO RIESGO ✅ |
+| C-010 | 37.3% | 16.84% | −20.5 | 16.8% | 40.7 pp | 16 | RIESGO MODERADO ❌ |
+| C-017 | 53.1% | 33.16% | −19.9 | 33.0% | 40.9 pp | 16 | ALTO RIESGO ✅ |
+| C-043 | 2.2% | 28.54% | +26.3 | 28.5% | 51.7 pp | 20 | ALTO RIESGO ❌ |
+| C-128 | 30.4% | 26.31% | −4.1 | 26.5% | 41.3 pp | 16 | ALTO RIESGO ✅ |
 | C-360 | 10.1% | 15.55% | +5.4 | 16.5% | 38.9 pp | 16 | RIESGO MODERADO ✅ |
-| C-361 | 19.1% | 16.99% | −2.1 | 18.5% | 51.3 pp | 20 | ALTO RIESGO ❌ |
-| C-362 | 4.4% | 9.54% | +5.2 | 10.5% | 50.9 pp | 20 | RIESGO MODERADO ✅ |
-| C-363 | 7.2% | 15.13% | +7.9 | 16.2% | 39.0 pp | 16 | RIESGO MODERADO ✅ |
-| C-364 | 20.8% | 10.85% | −10.0 | 12.0% | 65.4 pp | 24 | RIESGO MODERADO ✅ |
+| C-361 | 19.1% | 16.99% | −2.1 | 17.7% | 51.9 pp | 20 | ALTO RIESGO ❌ |
+| C-362 | 4.4% | 9.54% | +5.2 | 10.0% | 50.5 pp | 20 | RIESGO MODERADO ✅ |
+| C-363 | 7.2% | 15.13% | +7.9 | 16.2% | 40.8 pp | 16 | RIESGO MODERADO ✅ |
+| C-364 | 20.8% | 10.85% | −10.0 | 11.7% | 62.2 pp | 24 | RIESGO MODERADO ✅ |
+| C-365 | — | 28.16% | — | 28.1% | 51.4 pp | 20 | ALTO RIESGO 🔮 |
 
 ## Arquitectura
 

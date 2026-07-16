@@ -114,34 +114,34 @@ curl -X POST http://localhost:8003/predict -F "file=@tests/data/c-001.csv"
 Ejecutada el 2026-07-11. Todos los contratos se cargaron manualmente por el usuario vía "Pegar texto" en el frontend. Los valores SVR y Prob. se tomaron de la respuesta de la API almacenada en `history.db`. El intervalo de confianza (P90-P10) usa RMSE variable según la cantidad de riesgos de cada contrato (ver sección 8).
 
 | Contrato | Inicio | Fin | Real (%) | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 | ¿Acierta? |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| C-001 | 2018 | 2019 | 28.6 | 25.01% | −3.6 pp | 81.7% | 🔴 ALTO RIESGO | 12 | 16 pp | 2.5% | 23.6% | 45.2% | 42.7 pp | ✅ |
-| C-010 | 2018 | 2020 | 37.3 | 16.84% | −20.5 pp | 41.0% | 🟢 RIESGO MODERADO | 20 | 16 pp | −2.9% | 16.4% | 37.4% | 40.4 pp | ❌ |
-| C-017 | 2019 | 2022 | 53.1 | 33.16% | −19.9 pp | 91.7% | 🔴 ALTO RIESGO | 18 | 16 pp | 12.3% | 32.6% | 53.6% | 41.3 pp | ✅ |
-| C-043 | 2021 | 2022 | 2.2 | 28.54% | +26.3 pp | 80.7% | 🔴 ALTO RIESGO | 22 | 20 pp | 2.4% | 28.9% | 54.7% | 52.3 pp | ❌ |
-| C-128 | 2019 | 2021 | 30.4 | 26.31% | −4.1 pp | 66.9% | 🔴 ALTO RIESGO | 15 | 16 pp | 5.3% | 25.8% | 46.6% | 41.3 pp | ✅ |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C-001 | 2018 | 2019 | 28.6 | 25.01% | −3.6 pp | 81.7% | 🔴 ALTO RIESGO | 12 | 16 pp | 3.0% | 24.3% | 44.9% | 41.9 pp | ✅ |
+| C-010 | 2018 | 2020 | 37.3 | 16.84% | −20.5 pp | 41.0% | 🟢 RIESGO MODERADO | 20 | 16 pp | −3.3% | 16.8% | 37.4% | 40.7 pp | ❌ |
+| C-017 | 2019 | 2022 | 53.1 | 33.16% | −19.9 pp | 91.7% | 🔴 ALTO RIESGO | 18 | 16 pp | 12.8% | 33.0% | 53.7% | 40.9 pp | ✅ |
+| C-043 | 2021 | 2022 | 2.2 | 28.54% | +26.3 pp | 80.7% | 🔴 ALTO RIESGO | 22 | 20 pp | 2.4% | 28.5% | 54.2% | 51.7 pp | ❌ |
+| C-128 | 2019 | 2021 | 30.4 | 26.31% | −4.1 pp | 66.9% | 🔴 ALTO RIESGO | 15 | 16 pp | 5.6% | 26.5% | 46.9% | 41.3 pp | ✅ |
 
 **Error absoluto promedio:** 14.9 pp  
 **Aciertos de alerta:** 3/5 (C-001, C-017, C-128 aciertan; C-010 falso negativo; C-043 falso positivo)  
-**Conclusión:** ✅ El pipeline funciona. El modelo SVR tiende a subestimar sobrecostos altos y sobreestimar bajos (regresión a la media). La incertidumbre (P90-P10) ahora varía según la complejidad del contrato: C-043 (22 riesgos) tiene P90-P10 de 52.3 pp vs ~41 pp de contratos con menos riesgos.
+**Conclusión:** ✅ El pipeline funciona. El modelo SVR tiende a subestimar sobrecostos altos y sobreestimar bajos (regresión a la media). La incertidumbre (P90-P10) ahora varía según la complejidad del contrato: C-043 (22 riesgos) tiene P90-P10 de 51.7 pp vs ~41 pp de contratos con menos riesgos.
 
 ## 7. Resultados — Prueba de Generalización (Grupo B)
 
 Ejecutada el 2026-07-11. Contratos proporcionados por el asesor, no incluidos en el dataset de 351. Procesados manualmente vía "Pegar texto".
 
 | Contrato | Inicio | Fin | Real (%) | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 | ¿Acierta? |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | C-360 | 2019 | 2019 | 10.14 | 15.55% | +5.4 pp | 21.4% | 🟢 RIESGO MODERADO | 14 | 16 pp | −3.4% | 16.5% | 35.5% | 38.9 pp | ✅ |
-| C-361 | 2022 | 2022 | 19.09 | 16.99% | −2.1 pp | 60.2% | 🔴 ALTO RIESGO | 28 | 20 pp | −7.9% | 18.5% | 43.5% | 51.3 pp | ❌ |
-| C-362 | 2021 | 2021 | 4.38 | 9.54% | +5.2 pp | 21.4% | 🟢 RIESGO MODERADO | 27 | 20 pp | −15.9% | 10.5% | 35.0% | 50.9 pp | ✅ |
-| C-363 | 2022 | 2022 | 7.20 | 15.13% | +7.9 pp | 36.8% | 🟢 RIESGO MODERADO | 14 | 16 pp | −3.5% | 16.2% | 35.5% | 39.0 pp | ✅ |
-| C-364 | 2023 | 2023 | 20.83 | 10.85% | −10.0 pp | 18.8% | 🟢 RIESGO MODERADO | 34 | 24 pp | −19.8% | 12.0% | 45.5% | 65.4 pp | ✅ |
+| C-361 | 2022 | 2022 | 19.09 | 16.99% | −2.1 pp | 60.2% | 🔴 ALTO RIESGO | 28 | 20 pp | −8.5% | 17.7% | 43.4% | 51.9 pp | ❌ |
+| C-362 | 2021 | 2021 | 4.38 | 9.54% | +5.2 pp | 21.4% | 🟢 RIESGO MODERADO | 27 | 20 pp | −15.2% | 10.0% | 35.3% | 50.5 pp | ✅ |
+| C-363 | 2022 | 2022 | 7.20 | 15.13% | +7.9 pp | 36.8% | 🟢 RIESGO MODERADO | 14 | 16 pp | −4.4% | 16.2% | 36.4% | 40.8 pp | ✅ |
+| C-364 | 2023 | 2023 | 20.83 | 10.85% | −10.0 pp | 18.8% | 🟢 RIESGO MODERADO | 34 | 24 pp | −19.4% | 11.7% | 42.7% | 62.2 pp | ✅ |
 
 **Error absoluto promedio:** 6.1 pp  
 **MAE:** 6.1 pp (< 20 pp ✅)  
 **Tiempo de respuesta:** < 2s por contrato (< 5s ✅)  
 **Aciertos de alerta:** 4/5 (solo C-361 falso positivo)  
-**Conclusión:** ✅ El modelo generaliza excelentemente en datos no vistos con MAE de 6.1 pp. C-364 (34 riesgos) muestra el intervalo más amplio de todos (P90-P10 = 65.4 pp), reflejando su alta complejidad.
+**Conclusión:** ✅ El modelo generaliza excelentemente en datos no vistos con MAE de 6.1 pp. C-364 (34 riesgos) muestra el intervalo más amplio de todos (P90-P10 = 62.2 pp), reflejando su alta complejidad.
 
 ## 8. Mejora Implementada — RMSE Variable por Complejidad
 
@@ -196,17 +196,17 @@ Contrato C-365 (Puente Aranda / Troncal Calle 13, IDU Bogotá) está en ejecuci�
 | Riesgos en matriz | 25 |
 | URL | https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.3690937 |
 
-### 9.3 Resultados (Ejecutado 2026-07-13)
+### 9.3 Resultados (Ejecutado 2026-07-16)
 
 | Contrato | Inicio | Fin | SVR | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
 |----------|-------|-----|-----|-------|--------|---------|------|-----|-----|-----|---------|
-| C-365 | 2023 | 2027 | 28.16% | 92.0% | 🔴 ALTO RIESGO | 25 | 20 pp | 3.66% | 28.81% | 54.83% | 51.17 pp |
+| C-365 | 2023 | 2027 | 28.16% | 92.0% | 🔴 ALTO RIESGO | 25 | 20 pp | 3.04% | 28.07% | 54.46% | 51.42 pp |
 
 ### 9.4 Clasificación RMSE
 
 Con 25 riesgos, C-365 entra en la categoría **"Complejos" (21–30 riesgos)** → RMSE = **20 pp**.
 
-**Interpretación:** El modelo predice un sobrecosto central de **28.2%** para el Puente Aranda, clasificándolo como **ALTO RIESGO** (92.0% de probabilidad). Con P90-P10 de 51.2 pp, la incertidumbre es considerable — desde un sobrecosto leve (P10=3.7%) hasta más de la mitad del valor del contrato (P90=54.8%). En COP: el sobrecosto esperado es de **$137.7 mil M** (P50), con un rango P10-P90 de **$17.5 mil M a $262.0 mil M**. Los riesgos que más contribuyen son indemnizaciones a terceros, variación de precios, y daños a la obra.
+**Interpretación:** El modelo predice un sobrecosto central de **28.2%** para el Puente Aranda, clasificándolo como **ALTO RIESGO** (92.0% de probabilidad). Con P90-P10 de 51.4 pp, la incertidumbre es considerable — desde un sobrecosto leve (P10=3.0%) hasta más de la mitad del valor del contrato (P90=54.5%). En COP: el sobrecosto esperado es de **$134.1 mil M** (P50), con un rango P10-P90 de **$14.5 mil M a $260.2 mil M**. Los riesgos que más contribuyen son indemnizaciones a terceros, variación de precios, y daños a la obra.
 
 ---
 
@@ -272,3 +272,53 @@ Rangos evaluados (13 rangos bienales solapados de 2010 a 2024):
 ### 10.4 Clasificación RMSE
 
 C-128 tiene 15 riesgos → **"Típicos" (11–20)** → RMSE = **16 pp** para todos los rangos temporales.
+
+---
+
+## 11. Desglose de Contribución por Riesgo — SHAP
+
+El desglose individual asigna a cada riesgo su contribución real al sobrecosto predicho usando valores Shapley vía `shap.KernelExplainer` (1000 samples, 100 contratos de background). A continuación los **top 3 riesgos** que más contribuyen al sobrecosto estimado en cada contrato de prueba:
+
+| Contrato | # | Riesgo | Tipo | Prob | Imp | Contrib. (pp) |
+|----------|---|--------|------|:----:|:---:|:-------------:|
+| **C-001** | 1 | Daño a viviendas u obras públicas | operacional | 3 | 5 | 4.12 pp |
+| | 2 | Perjuicios por actuaciones del contratista | operacional | 2 | 4 | 2.20 pp |
+| | 3 | Incumplimiento en ejecución del contrato | operacional | 2 | 4 | 2.20 pp |
+| **C-010** | 1 | Vandalismo / destrucción de obra | social | 4 | 3 | 1.89 pp |
+| | 2 | Paro/huelga de trabajadores | social | 3 | 4 | 1.89 pp |
+| | 3 | Invierno / eventos naturales | naturaleza | 3 | 4 | 1.89 pp |
+| **C-017** | 1 | Estudio de mercado insuficiente | económico | 3 | 4 | 2.41 pp |
+| | 2 | Daños a redes de servicios públicos | operacional | 3 | 4 | 2.41 pp |
+| | 3 | Fallas en seguridad industrial | operacional | 3 | 4 | 2.41 pp |
+| **C-043** | 1 | Bienes sin calidad contratada | operacional | 3 | 4 | 2.22 pp |
+| | 2 | Huelgas / paros / asonadas | social | 3 | 4 | 2.22 pp |
+| | 3 | Obras no entregadas a tiempo | operacional | 3 | 3 | 1.67 pp |
+| **C-128** | 1 | Estimación inadecuada de costos | operacional | 3 | 4 | 3.76 pp |
+| | 2 | Planos/diseños con fallas estructurales | operacional | 2 | 5 | 3.13 pp |
+| | 3 | Catástrofes naturales / ola invernal | naturaleza | 4 | 2 | 2.51 pp |
+| **C-360** | 1 | Proceso declarado desierto | económico | 2 | 4 | 1.86 pp |
+| | 2 | Variación atípica de precios | económico | 2 | 4 | 1.86 pp |
+| | 3 | Análisis insuficiente de APU's | económico | 2 | 4 | 1.86 pp |
+| **C-361** | 1 | Estimación inadecuada de costos | financiero | 4 | 4 | 1.49 pp |
+| | 2 | Falta de seguimiento a contratos | operacional | 4 | 4 | 1.49 pp |
+| | 3 | Inadecuada publicación en SECOP | operacional | 4 | 3 | 1.12 pp |
+| **C-362** | 1 | Entrega tardía de materiales | operacional | 4 | 4 | 0.79 pp |
+| | 2 | Mano de obra no calificada | operacional | 4 | 4 | 0.79 pp |
+| | 3 | Defectos en calidad de la obra | operacional | 4 | 4 | 0.79 pp |
+| **C-363** | 1 | Variación del precio del dólar | regulatorio | 5 | 3 | 1.86 pp |
+| | 2 | Fallas en logística de suministro | operacional | 3 | 4 | 1.49 pp |
+| | 3 | Variación de tasas de interés | financiero | 3 | 4 | 1.49 pp |
+| **C-364** | 1 | Errores en elaboración de propuestas | operacional | 4 | 4 | 0.71 pp |
+| | 2 | Entrega tardía de materiales | operacional | 4 | 4 | 0.71 pp |
+| | 3 | Mano de obra calificada insuficiente | operacional | 4 | 4 | 0.71 pp |
+| **C-365** | 1 | Indemnizaciones a terceros | económico | 3 | 5 | 2.30 pp |
+| | 2 | Variación de precios (global) | económico | 4 | 3 | 1.84 pp |
+| | 3 | Indemnizaciones a empleados | económico | 2 | 5 | 1.53 pp |
+
+**Patrones observados:**
+
+- Los riesgos **operacionales** dominan en contratos de obra tradicional (C-001, C-017, C-128, C-362, C-364)
+- Los riesgos **económicos** pesan más en contratos con exposición a mercado (C-360, C-363, C-365)
+- En contratos **complejos** (>25 riesgos como C-362, C-364), la contribución se distribuye en muchos riesgos con valores individuales bajos (~0.7-0.8 pp cada uno)
+- C-365 (Puente Aranda) es el único donde el **top 3 son todos económicos**, reflejando la exposición macro de un contrato de $477B a 4 años de duración
+- La contribución en COP del riesgo top de C-365 es de **$10.99 mil M**, superando el valor individual de contratos enteros del Grupo B
