@@ -31,6 +31,15 @@ def _rmse_por_contrato(n_riesgos: int) -> float:
         return 24.0
 
 
+@lru_cache(maxsize=1)
+def _load_rmse_predictor():
+    """Cargar modelo de predicción de error (RMSE dinámico)."""
+    path = ROOT / "models" / "rmse_predictor.pkl"
+    if not path.exists():
+        return None
+    return joblib.load(path)
+
+
 def _build_x(df_feat, feature_names, probs, imps, idx_var):
     x = df_feat[feature_names].values.copy()
     pm = probs.mean()
@@ -264,11 +273,21 @@ def compute(
 
     df_feat = aggregate_risks(df_contrato, anio_inicio=anio_inicio, anio_fin=anio_fin, ipc_override=ipc_override, trm_override=trm_override)
     n_riesgos = len(df_contrato)
-    rmse = _rmse_por_contrato(n_riesgos)
     probs_orig = df_contrato["probabilidad"].values.astype(float)
     imps_orig = df_contrato["impacto"].values.astype(float)
 
     X_base = _build_x(df_feat, feature_names, probs_orig, imps_orig, idx_var)
+
+    # RMSE dinámico: predecir error esperado del SVR (con fallback a heurística)
+    rmse_predictor = _load_rmse_predictor()
+    if rmse_predictor is not None:
+        X_s = scaler.transform(X_base)
+        rmse_pred = float(rmse_predictor.predict(X_s)[0])
+        rmse_heur = _rmse_por_contrato(n_riesgos)
+        rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)  # piso 2pp, mínimo 85% de heurística
+    else:
+        rmse = _rmse_por_contrato(n_riesgos)
+
     pred_base = float(regressor.predict(scaler.transform(X_base))[0])
 
     muestras = np.empty(n_iteraciones)

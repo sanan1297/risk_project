@@ -1,50 +1,37 @@
 graph TB
     subgraph Docker["Docker Compose"]
-
-        subgraph FrontendContainer["Frontend — puerto :8501"]
-            ST[Streamlit App<br/>streamlit_app.py]
+        subgraph Frontend["Frontend - Streamlit (:8501)"]
+            ST["Dashboard + Prediccion + Historial"]
         end
 
-        subgraph BackendContainer["Backend — puerto :8003"]
-            FA[FastAPI<br/>main.py]
-            subgraph BackendMod["Módulos"]
-                FE[feature_engineering.py]
-                PR[predictor.py]
-                MLFT[mlflow_tracker.py]
-                QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
-                H[history.py<br/>SQLite CRUD + stats + resultados MC]
-                TS[training_stats.py]
-                FL[feature_labels.py]
-                SC[schemas.py]
-            end
+        subgraph Backend["Backend - FastAPI (:8003)"]
+            FA["main.py - REST API"]
+            FE["feature_engineering.py"]
+            PR["predictor.py - SVR + Logistic"]
+            RP["rmse_predictor.pkl - Safety 0.85"]
+            QA["quantitative_analysis.py - MC + SHAP"]
+            H["history.py - SQLite"]
         end
 
-        subgraph MLflowContainer["MLflow Server — puerto :5000"]
-            ML[mlflow server<br/>v3.14.0]
+        subgraph MLflow["MLflow Server (:5000)"]
+            ML["Model Registry + Experiment"]
         end
-
     end
 
-    subgraph Volumes["Volúmenes"]
-        DB[(history.db)]
-        MLDATA[(mlflow_data)]
+    subgraph Volumes["Volumenes"]
+        DB["history.db"]
+        MLD["mlflow_data"]
     end
 
-    subgraph LocalModels["Fallback Local (models/)"]
-        M1[svr_regressor.pkl]
-        M2[classifier.pkl]
-        M3[scaler.pkl]
-        M4[feature_names.pkl]
-        M5[ridge_reference.pkl]
-        M6[permutation_importance.csv]
-        M7[tfidf_vectorizer.pkl]
-        M8[ipc_trm.pkl]
+    subgraph Local["Fallback models/"]
+        L1["svr_regressor.pkl"]
+        L2["rmse_predictor.pkl"]
+        L3["classifier + scaler + tfidf + shap_bg"]
     end
 
     ST -->|HTTP :8003| FA
-    FA --> BackendMod
-    BackendMod -->|carga startup| MLFT
-    MLFT -->|HTTP :5000| ML
-    MLFT -->|fallback| LocalModels
-    BackendMod -->|lectura/escritura| DB
-    ML --> MLDATA
+    FA --> FE & PR & RP & QA & H
+    FE & PR & RP & QA -->|startup| ML
+    ML --> MLD
+    QA & H --> DB
+    FA -->|fallback| Local

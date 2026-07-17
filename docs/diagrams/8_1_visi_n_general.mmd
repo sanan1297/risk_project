@@ -12,7 +12,7 @@ graph TB
             FE[feature_engineering.py<br/>Agregación de riesgos → 35 features]
             PREDICT[predictor.py<br/>SVR RBF R² CV 0.068 + Logistic AUC 0.673]
             MLF[mlflow_tracker.py<br/>Carga desde MLflow<br/>fallback a local]
-            QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose]
+            QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose SHAP]
             HISTDB[history.py<br/>SQLite CRUD + resultado_json MC]
             TRAIN[training_stats.py<br/>351 contratos, R², coeficientes]
             LABELS[feature_labels.py<br/>Labels legibles]

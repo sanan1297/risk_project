@@ -1,0 +1,24 @@
+graph TD
+    subgraph Background["Background: 100 contratos de entrenamiento"]
+        BG["shap_background.pkl"]
+    end
+
+    subgraph KernelExplainer["shap.KernelExplainer"]
+        KE["1000 samples<br/>Mapeo features → riesgos<br/>TF-IDF invertido"]
+    end
+
+    subgraph Output["Contribucion por riesgo"]
+        O1["Cada riesgo recibe su valor Shapley"]
+        O2["Reemplaza heuristica anterior:<br/>pred x prob x imp / sum(prob x imp)"]
+    end
+
+    subgraph Visualizacion["Visualizacion"]
+        V1["Top 3 riesgos por contrato"]
+        V2["Distribucion SHAP global"]
+        V3["Contribucion en % y COP"]
+    end
+
+    BG --> KE
+    KE --> O1
+    O1 --> O2
+    O1 --> V1 & V2 & V3

@@ -5,6 +5,7 @@ sequenceDiagram
     participant ML as MLflow
     participant FE as feature_engineering
     participant P as predictor
+    participant RP as RMSE_Predictor
     participant QA as quantitative_analysis
     participant DB as history.db
 
@@ -12,33 +13,35 @@ sequenceDiagram
     B->>ML: init_from_mlflow()
     ML-->>B: ModelVersion (run_id, version, experiment_id)
     B->>ML: load_artifacts() / load_permutation_importance()
-    ML-->>B: svr_regressor, classifier, scaler, features
+    ML-->>B: svr_regressor, classifier, scaler, features, rmse_predictor
     Note over B: Si MLflow no disponible:<br/>fallback a models/*.pkl
 
     U->>F: Sube CSV o pega texto
     F->>F: Valida + calcula n_riesgos
     U->>F: Click "Procesar"
-    F->>F: 🌀 spinner (cualitativo)
+    F->>F: spinner (cualitativo)
     F->>B: POST /predict (file + params)
     B->>FE: aggregate_risks(df)
-    FE-->>B: features + id_contrato
+    FE-->>B: 35 features + id_contrato
     B->>P: predict(features)
-    P-->>B: Ridge % + prob + alerta + factores
+    P-->>B: SVR % + prob + alerta + factores
     B->>DB: INSERT predicción
     DB-->>B: history_id
     B-->>F: PrediccionSalida (con history_id)
     F-->>U: Cards con resultado + factores
     Note over F: Análisis cualitativo listo
 
-    F->>F: 🌀 spinner (cuantitativo)
+    F->>F: spinner (cuantitativo)
     F->>B: POST /predict/montecarlo (file + params + history_id)
     B->>FE: aggregate_risks(df)
     B->>QA: compute(df_contrato, n_iteraciones, valor_inicial, ...)
-    QA->>QA: Monte Carlo: 1000 iteraciones, Δ∈{-1,0,+1} en prob/imp
-    QA->>QA: SVR predict en cada iteración + ruido Gaussiano N(0, RMSE_var) según n_riesgos
-    QA->>QA: Tornado por tipo: perturba todos ±1, mide swing
-    QA->>QA: Desglose por riesgo: peso = (prob_i × imp_i) / Σ(prob×imp)
+    QA->>RP: rmse = max(rmse_pred, rmse_heur*0.85, 2.0)
+    RP-->>QA: RMSE dinámico (safety factor 0.85)
+    QA->>QA: MC: 1000 iter, Δ∈{-1,0,+1} en prob/imp
+    QA->>QA: SVR predict en cada iter + ruido N(0, RMSE)
+    QA->>QA: Tornado: perturba todas ±1, mide swing real
+    QA->>QA: SHAP KernelExplainer: 1000 samples, 100 bg
     QA-->>B: percentiles, stats, histograma, tornado, desglose
     B->>DB: UPDATE mc_iteraciones + resultado_json
     B-->>F: MonteCarloSalida (% y COP si hay valor_inicial)
-    F-->>U: Histograma + tabla tornado + desglose por riesgo
+    F-->>U: Histograma + tornado + desglose SHAP por riesgo

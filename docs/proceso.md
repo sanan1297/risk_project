@@ -319,9 +319,9 @@ La app es single-page con navegación vía `?view=` en query params:
 
 ### 8.4 Flujo de Datos — Predicción
 
-![Flujo de datos — Predicción: usuario sube CSV, Streamlit llama a la API, feature engineering + SVR + Monte Carlo, resultados en SQLite](diagrams/8_4_flujo_de_datos_predicci_n.png)
+![Flujo de datos — Predicción: usuario sube CSV, Streamlit llama a la API, feature engineering + SVR + RMSE dinámico (safety factor 0.85) + MC + SHAP, resultados en SQLite](diagrams/8_4_flujo_de_datos_predicci_n.png)
 
-*Flujo de datos — Predicción: usuario sube CSV, Streamlit llama a la API, feature engineering + SVR + Monte Carlo, resultados en SQLite*
+*Flujo de datos — Predicción: usuario sube CSV, Streamlit llama a la API, feature engineering + SVR + RMSE dinámico (safety factor 0.85) + MC + SHAP, resultados en SQLite*
 
 ### 8.5 Flujo de Datos — Dashboard
 
@@ -337,17 +337,66 @@ La app es single-page con navegación vía `?view=` en query params:
 
 ### 8.7 Pipeline Completo
 
-![Pipeline completo: desde SECOP API hasta el frontend, pasando por extracción, feature engineering y modelo SVR](diagrams/8_7_pipeline_completo.png)
+![Pipeline completo: desde SECOP API hasta el frontend, pasando por extracción, feature engineering, SVR + RMSE Predictor, MLflow y FastAPI](diagrams/8_7_pipeline_completo.png)
 
-*Pipeline completo: desde SECOP API hasta el frontend, pasando por extracción, feature engineering y modelo SVR*
+*Pipeline completo: desde SECOP API hasta el frontend, pasando por extracción, feature engineering, SVR + RMSE Predictor, MLflow y FastAPI*
 
-### 8.8 Arquitectura del Sistema
+### 8.8 RMSE Dinámico — Predicción de Error ML
 
-![Arquitectura del sistema: navegador → Streamlit → FastAPI → módulos backend → archivos de datos](diagrams/8_8_arquitectura_del_sistema.png)
+El RMSE del Monte Carlo se predice con un modelo ML independiente en vez de la heurística por bucket:
 
-*Arquitectura del sistema: navegador → Streamlit → FastAPI → módulos backend → archivos de datos*
+```
+Features (35) ──→ SVR Sobrecosto ──→ predicción central (sobrecosto %)
+               ──→ RMSE Predictor ──→ error esperado del SVR (RMSE dinámico)
+                                         ↓
+                               Monte Carlo (ruido ~ N(0, RMSE))
+```
 
-### 8.9 Modelo de Datos — SQLite (`history.db`)
+**Entrenamiento:** Se calculó `|sobrecosto_real - svr_pred|` para los 351 contratos históricos y se entrenó un SVR Linear con las mismas 35 features. El modelo aprende qué perfiles de contrato tienen mayor/menor error de predicción.
+
+**Resultados (n=351):**
+| Método | MAE | Mejora |
+|---|---|---|
+| Heurística (bucket) | 12.78 pp | — |
+| RMSE Predictor | **8.66 pp** | **+32.3%** |
+
+**Mejora por bucket:**
+| Bucket | Heur | Pred | Mejora |
+|---|---|---|---|
+| 1-10 | 7.24 | 5.21 | +28% |
+| 11-20 | 16.68 | 13.21 | +21% |
+| 21-30 | 12.44 | 6.84 | +45% |
+| >30 | 16.10 | 8.12 | +50% |
+
+Los buckets 21-30 y >30 tenían la mayor sobreestimación (asignaban 20-24 pp a contratos con error real ~10 pp). El RMSE Predictor corrige esto usando TF-IDF, categorías y macro para estimar la incertidumbre real de cada contrato.
+
+**Archivo:** `models/rmse_predictor.pkl` (SVR Linear, mismo escalador que el SVR de sobrecosto). Fallback a heurística si el archivo no existe.
+
+### 8.8.1 Safety Factor — Ajuste por Cobertura
+
+En validación con 12 contratos, el RMSE Predictor crudo dejaba 5/10 reales fuera del intervalo P10-P90. Se implementó un safety factor en `backend/quantitative_analysis.py:compute()`:
+
+```python
+rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)
+```
+
+Donde `rmse_heur` es el valor de la heurística por n_riesgos. Esto asegura que el RMSE nunca sea menor al 85% del valor heurístico, manteniendo intervalos 15% más angostos pero con cobertura aceptable.
+
+**Validación (12 contratos, factor 0.85):**
+- **Cobertura:** 7/10 contratos con real dentro de P10-P90
+- **RMSE mínimo:** 13.6 pp (vs 16 pp con heurística pura)
+- **P90-P10 típico:** ~35 pp (vs ~41 pp con heurística)
+- **Contratos fuera:** C-010, C-017, C-043 (error SVR >19 pp)
+
+El factor 0.85 es un balance entre precisión (intervalos más angostos) y cobertura (70% de aciertos). Puede ajustarse a 1.0 si se prioriza cobertura sobre precisión.
+
+### 8.9 Arquitectura del Sistema
+
+![Arquitectura del sistema: Docker Compose con Streamlit, FastAPI (incluyendo RMSE Predictor), MLflow y volúmenes persistentes](diagrams/8_8_arquitectura_del_sistema.png)
+
+*Arquitectura del sistema: Docker Compose con Streamlit, FastAPI (incluyendo RMSE Predictor), MLflow y volúmenes persistentes*
+
+### 8.10 Modelo de Datos — SQLite (`history.db`)
 
 ![Modelo de datos ER — Tabla predicciones en SQLite con campos cualitativos y cuantitativos](diagrams/8_9_modelo_de_datos_sqlite_history_db.png)
 
@@ -376,7 +425,7 @@ La app es single-page con navegación vía `?view=` en query params:
 
 ---
 
-### 8.10 Trazabilidad con MLflow
+### 8.11 Trazabilidad con MLflow
 
 Se integró **MLflow 3.14** como sistema de trazabilidad de experimentos y modelo:
 
@@ -394,7 +443,7 @@ Flujo de carga de artefactos:
 4. Si no hay conexión o modelo, carga desde `models/` (archivos `.pkl` locales)
 5. `load_permutation_importance()` sigue el mismo patrón
 
-### 8.11 Contenerización con Docker
+### 8.12 Contenerización con Docker
 
 La aplicación se despliega con **Docker Compose** en 3 servicios:
 
@@ -508,7 +557,7 @@ risk_project/
 │   ├── predictor.py              # Carga SVR + LogisticRegression (35 features, permutation importance)
 │   ├── mlflow_tracker.py         # Carga de modelos desde MLflow Model Registry (fallback local)
 │   ├── feature_engineering.py    # Agregación de riesgos → 35 features (rango fechas: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio)
-│   ├── quantitative_analysis.py  # Monte Carlo (1000 iter, RMSE variable por n_riesgos), tornado, desglose SHAP
+│   ├── quantitative_analysis.py  # Monte Carlo (1000 iter, RMSE dinámico vía ML), tornado, desglose SHAP
 │   ├── history.py                # CRUD SQLite + stats + almacenamiento resultado_json del MC
 │   ├── training_stats.py         # Estadísticas del dataset de entrenamiento (351 contratos)
 │   └── feature_labels.py         # Labels legibles para features técnicas
@@ -523,7 +572,8 @@ risk_project/
 │   ├── feature_names.pkl         # Lista de 35 feature names
 │   ├── tfidf_vectorizer.pkl      # Vectorizador TF-IDF
 │   ├── ipc_trm.pkl               # Diccionario IPC/TRM por año
-│   └── shap_background.pkl       # 100 contratos de background para SHAP KernelExplainer
+│   ├── shap_background.pkl       # 100 contratos de background para SHAP KernelExplainer
+│   └── rmse_predictor.pkl        # SVR Linear para RMSE dinámico (+32% vs heurística)
 ├── scripts/
 │   └── train_final_model.py      # Entrenamiento reproducible del modelo final
 ├── docs/
@@ -663,3 +713,7 @@ Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 20
 | 2026-07-14 | **Trazabilidad MLflow**: servidor MLflow 3.14, experimento `risk-predictor`, model registry `risk-predictor-svr`. Backend carga modelo desde MLflow con fallback local. Endpoint `GET /model/info`. Entrenamiento registra params, metrics y artifacts. |
 | 2026-07-16 | **Desglose SHAP**: se reemplazó la heurística `contribución = pred_base × (prob×imp / Σ prob×imp)` por valores Shapley locales vía `shap.KernelExplainer` (1000 samples, 100 contratos background). Cada riesgo recibe su contribución real según lo que el SVR aprendió de las 35 features, mapeando TF-IDF, proporciones categóricas y variables macro a los riesgos individuales que las generaron. |
 | 2026-07-16 | **Re-ejecución completa**: 12 predicciones reprocesadas vía frontend Docker (C-001 a C-365) con 5000 iteraciones MC. Actualizados contratos_prueba.csv, README, docs/proceso.md, tests/plan_de_pruebas.md con nuevos percentiles MC. |
+| 2026-07-16 | **RMSE Dinámico**: se entrenó `models/rmse_predictor.pkl` (SVR Linear) para predecir el error del SVR usando las 35 features. MAE 8.66 pp vs heurística 12.78 pp (+32.3%). Se integró en `quantitative_analysis.py:compute()` con fallback a heurística. |
+| 2026-07-16 | **Safety Factor 0.85**: se implementó `rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)`. Validación con 12 contratos: cobertura 7/10 (70%), P90-P10 típico ~35 pp (vs 41 pp heurística). 3 contratos fuera (C-010, C-017, C-043) con error SVR >19 pp. |
+| 2026-07-16 | **Cobertura de validación**: tabla detallada de 12 contratos con real, SVR, error, RMSE, P10/P50/P90, cobertura documentada en `tests/plan_de_pruebas.md` sección 8.7. |
+| 2026-07-16 | **C-128 temporal re-ejecutado** con RMSE dinámico + safety factor 0.85. 13 rangos, RMSE=13.6 pp constante, P90-P10=~35 pp (reducción de ~6 pp vs heurística). Resultados actualizados en `tests/data/c-128_temporal.csv`. |

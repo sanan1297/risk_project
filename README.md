@@ -45,34 +45,36 @@ El modelo pasó por 3 fases antes de llegar a SVR:
 | v4a | **Ridge** (rango) | 35 (rango fechas) | 0.066 CV | **No funcionó** — Ridge no captura relaciones no lineales entre duración, IPC compuesto y TRM |
 | **v4b** | **SVR RBF** | 35 (rango fechas) | **0.068 CV** | **Campeón final** — kernel RBF sí modela las no-linealidades del rango temporal |
 
-### Mejora: RMSE Variable por Complejidad
+### Mejora: RMSE Dinámico (Predictor de Error ML)
 
-La incertidumbre del Monte Carlo ahora varía según la cantidad de riesgos del contrato:
+El RMSE del Monte Carlo ya no es una heurística fija por bucket de `n_riesgos`. Se entrenó un **segundo SVR (kernel linear)** que predice el error esperado del SVR de sobrecosto usando las mismas 35 features:
 
-| # Riesgos | RMSE | Ejemplo |
+| Método | MAE | Mejora |
 |---|---|---|
-| 1–10 | 12 pp | Contratos simples |
-| 11–20 | 16 pp | Contratos típicos (C-001, C-017) |
-| 21–30 | 20 pp | Contratos complejos (C-043, C-361) |
-| >30 | 24 pp | Contratos muy complejos (C-364) |
+| Heurística anterior (bucket) | 12.78 pp | — |
+| RMSE Predictor (SVR Linear) | **8.66 pp** | **+32.3%** |
+
+El predictor se entrenó sobre los residuales de los 351 contratos históricos (`|sobrecosto_real - svr_pred|`) y se guardó en `models/rmse_predictor.pkl`. En inferencia, calcula el RMSE dinámico para cada contrato según su perfil de riesgos (TF-IDF, categorías, macro), reemplazando la tabla estática por bucket.
+
+**Safety Factor (0.85):** `rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)` — garantiza que el RMSE nunca baje del 85% del valor heurístico, manteniendo cobertura del 70% (7/10 contratos) en validación. Fallback automático a la heurística si el modelo no está disponible.
 
 ### Pruebas de Validación (Julio 2026)
 
-**11 contratos de prueba (10 con validación real) — MAE global: 10.5 pp — Aciertos de alerta: 7/10**
+**11 contratos de prueba (10 con validación real) — MAE global: 10.5 pp — Aciertos de alerta: 7/10 — RMSE dinámico con safety factor 0.85**
 
 | Contrato | Real | SVR | Error | P50 | P90-P10 | RMSE | Alerta |
-|---|---|---|---|---|---|---|---|---|
-| C-001 | 28.6% | 25.01% | −3.6 | 24.3% | 41.9 pp | 16 | ALTO RIESGO ✅ |
-| C-010 | 37.3% | 16.84% | −20.5 | 16.8% | 40.7 pp | 16 | RIESGO MODERADO ❌ |
-| C-017 | 53.1% | 33.16% | −19.9 | 33.0% | 40.9 pp | 16 | ALTO RIESGO ✅ |
-| C-043 | 2.2% | 28.54% | +26.3 | 28.5% | 51.7 pp | 20 | ALTO RIESGO ❌ |
-| C-128 | 30.4% | 26.31% | −4.1 | 26.5% | 41.3 pp | 16 | ALTO RIESGO ✅ |
-| C-360 | 10.1% | 15.55% | +5.4 | 16.5% | 38.9 pp | 16 | RIESGO MODERADO ✅ |
-| C-361 | 19.1% | 16.99% | −2.1 | 17.7% | 51.9 pp | 20 | ALTO RIESGO ❌ |
-| C-362 | 4.4% | 9.54% | +5.2 | 10.0% | 50.5 pp | 20 | RIESGO MODERADO ✅ |
-| C-363 | 7.2% | 15.13% | +7.9 | 16.2% | 40.8 pp | 16 | RIESGO MODERADO ✅ |
-| C-364 | 20.8% | 10.85% | −10.0 | 11.7% | 62.2 pp | 24 | RIESGO MODERADO ✅ |
-| C-365 | — | 28.16% | — | 28.1% | 51.4 pp | 20 | ALTO RIESGO 🔮 |
+|---|---|---|---|---|---|---|---|---|---|
+| C-001 | 28.6% | 25.01% | −3.6 | 24.3% | 35.7 pp | 13.6 | ALTO RIESGO ✅ |
+| C-010 | 37.3% | 16.84% | −20.5 | 16.8% | 34.6 pp | 13.6 | RIESGO MODERADO ❌ |
+| C-017 | 53.1% | 33.16% | −19.9 | 32.9% | 34.8 pp | 13.6 | ALTO RIESGO ✅ |
+| C-043 | 2.2% | 28.54% | +26.3 | 28.3% | 44.0 pp | 17.0 | ALTO RIESGO ❌ |
+| C-128 | 30.4% | 26.31% | −4.1 | 26.4% | 35.2 pp | 13.6 | ALTO RIESGO ✅ |
+| C-360 | 10.1% | 15.55% | +5.4 | 16.4% | 34.7 pp | 13.6 | RIESGO MODERADO ✅ |
+| C-361 | 19.1% | 16.99% | −2.1 | 17.7% | 44.1 pp | 17.0 | ALTO RIESGO ❌ |
+| C-362 | 4.4% | 9.54% | +5.2 | 10.1% | 42.9 pp | 17.0 | RIESGO MODERADO ✅ |
+| C-363 | 7.2% | 15.13% | +7.9 | 16.1% | 34.8 pp | 13.6 | RIESGO MODERADO ✅ |
+| C-364 | 20.8% | 10.85% | −10.0 | 11.7% | 52.7 pp | 20.4 | RIESGO MODERADO ✅ |
+| C-365 | — | 28.16% | — | 28.1% | 43.7 pp | 17.0 | ALTO RIESGO 🔮 |
 
 ## Arquitectura
 

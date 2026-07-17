@@ -35,6 +35,9 @@ notebook = [
 [project.scripts]
 train = "scripts.train_final_model:main"
 
+[tool.uv]
+environments = ["sys_platform == 'linux'"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py313"
