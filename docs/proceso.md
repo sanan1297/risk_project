@@ -372,9 +372,32 @@ Los buckets 21-30 y >30 tenían la mayor sobreestimación (asignaban 20-24 pp a 
 
 **Archivo:** `models/rmse_predictor.pkl` (SVR Linear, mismo escalador que el SVR de sobrecosto). Fallback a heurística si el archivo no existe.
 
-### 8.8.1 Safety Factor — Ajuste por Cobertura
+### 8.8.1 Integración en el Backend
 
-En validación con 12 contratos, el RMSE Predictor crudo dejaba 5/10 reales fuera del intervalo P10-P90. Se implementó un safety factor en `backend/quantitative_analysis.py:compute()`:
+En `backend/quantitative_analysis.py:compute()`, en cada llamada al análisis cuantitativo:
+
+```python
+# Cargar modelo (cacheado con @lru_cache)
+rmse_predictor = _load_rmse_predictor()
+
+if rmse_predictor is not None:
+    X_s = scaler.transform(X_base)              # escalar 35 features
+    rmse_pred = float(rmse_predictor.predict(X_s)[0])  # predecir error del SVR
+    rmse_heur = _rmse_por_contrato(n_riesgos)          # referencia heurística
+    rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)       # safety factor
+else:
+    rmse = _rmse_por_contrato(n_riesgos)               # fallback
+```
+
+**¿Qué hace?** Para cada contrato, transforma sus 35 features (TF-IDF + categorías + macro) con el `StandardScaler`, y el SVR Linear predice cuánto espera que se equivoque el SVR de sobrecosto. Ese valor, combinado con el safety factor, se usa como σ del ruido Gaussiano en las 1000 iteraciones MC.
+
+**¿Por qué?** La heurística por bucket ignoraba diferencias en descripciones y categorías de riesgo, sobreestimando sistemáticamente en buckets 21-30 y >30 (asignaba 20-24 pp a errores reales de ~10 pp). El predictor mejora el MAE en +32.3%.
+
+**Características:** SVR Linear (C=1.0), 35 features, target = `|real - svr_pred|`, entrenado con 351 contratos, cacheado con `@lru_cache`, archivo `models/rmse_predictor.pkl`.
+
+### 8.8.2 Safety Factor — Ajuste por Cobertura
+
+En validación con 12 contratos, el RMSE Predictor crudo dejaba 5/10 reales fuera del intervalo P10-P90. Se implementó un safety factor:
 
 ```python
 rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)
@@ -715,5 +738,7 @@ Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 20
 | 2026-07-16 | **Re-ejecución completa**: 12 predicciones reprocesadas vía frontend Docker (C-001 a C-365) con 5000 iteraciones MC. Actualizados contratos_prueba.csv, README, docs/proceso.md, tests/plan_de_pruebas.md con nuevos percentiles MC. |
 | 2026-07-16 | **RMSE Dinámico**: se entrenó `models/rmse_predictor.pkl` (SVR Linear) para predecir el error del SVR usando las 35 features. MAE 8.66 pp vs heurística 12.78 pp (+32.3%). Se integró en `quantitative_analysis.py:compute()` con fallback a heurística. |
 | 2026-07-16 | **Safety Factor 0.85**: se implementó `rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)`. Validación con 12 contratos: cobertura 7/10 (70%), P90-P10 típico ~35 pp (vs 41 pp heurística). 3 contratos fuera (C-010, C-017, C-043) con error SVR >19 pp. |
-| 2026-07-16 | **Cobertura de validación**: tabla detallada de 12 contratos con real, SVR, error, RMSE, P10/P50/P90, cobertura documentada en `tests/plan_de_pruebas.md` sección 8.7. |
+| 2026-07-16 | **Cobertura de validación**: tabla detallada de 12 contratos con real, SVR, error, RMSE, P10/P50/P90, cobertura documentada en `tests/plan_de_pruebas.md` sección 8.8. |
 | 2026-07-16 | **C-128 temporal re-ejecutado** con RMSE dinámico + safety factor 0.85. 13 rangos, RMSE=13.6 pp constante, P90-P10=~35 pp (reducción de ~6 pp vs heurística). Resultados actualizados en `tests/data/c-128_temporal.csv`. |
+| 2026-07-16 | **Documentación RMSE Predictor**: se agregó sección 8.6 en `tests/plan_de_pruebas.md` con integración en backend, código completo, qué hace, por qué y características del modelo. Se agregó 8.8.1 en `docs/proceso.md` con el mismo detalle. |
+| 2026-07-16 | **Diagramas actualizados**: se regeneraron `8_4_flujo_de_datos_predicci_n.mmd` (con RMSE Predictor + safety factor + SHAP), `8_7_pipeline_completo.mmd` (con RMSE Predictor branch), `8_8_arquitectura_del_sistema.mmd` (con rmse_predictor.pkl). Nuevo diagrama `8_10_desglose_riesgos_shap.mmd`. |

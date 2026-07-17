@@ -186,30 +186,71 @@ Los buckets 21-30 y >30 tenían la mayor sobreestimación: la heurística asigna
 - Contratos atípicos o con descripciones ambiguas → RMSE alto → MC disperso
 - El RMSE global del SVR (44.54 pp) no cambia; lo que mejora es la *asignación* de incertidumbre por contrato
 
-### 8.6 Safety Factor — Ajuste por Cobertura
+### 8.6 Integración en el Backend — Código de Inferencia
 
-#### 8.6.1 Problema Identificado en Validación
-
-Al probar los 12 contratos con el RMSE Predictor crudo, se observó que **5 de 10 contratos** con validación real quedaban fuera del intervalo P10-P90. El predictor, al optimizar MAE, producía intervalos demasiado optimistas para contratos donde el SVR se equivocaba mucho.
-
-#### 8.6.2 Solución: Safety Factor
-
-Se implementó un factor de seguridad en `backend/quantitative_analysis.py:compute()`:
+El RMSE Predictor está integrado en `backend/quantitative_analysis.py:compute()` y se ejecuta en **cada llamada** al análisis cuantitativo. El flujo completo es:
 
 ```python
+# 1. Cargar modelo (cacheado con @lru_cache para evitar I/O repetido)
 rmse_predictor = _load_rmse_predictor()
+
 if rmse_predictor is not None:
+    # 2. Construir vector de 35 features para el contrato actual
+    X_base = _build_x(df_feat, feature_names, probs, imps, idx_var)
+
+    # 3. Escalar con el mismo StandardScaler del SVR de sobrecosto
     X_s = scaler.transform(X_base)
+
+    # 4. Predecir el error esperado del SVR para este contrato
     rmse_pred = float(rmse_predictor.predict(X_s)[0])
+
+    # 5. Calcular valor heurístico por n_riesgos como referencia
     rmse_heur = _rmse_por_contrato(n_riesgos)
+
+    # 6. RMSE final: máximo entre predicción ML, 85% de heurística, y piso 2 pp
     rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)
 else:
+    # Fallback: heurística tradicional por bucket de n_riesgos
     rmse = _rmse_por_contrato(n_riesgos)
 ```
 
-El RMSE final es el máximo entre: (a) la predicción del modelo ML, (b) el 85% del valor heurístico, (c) un piso de 2 pp.
+**¿Qué hace en cada predicción?**
+- Toma las 35 features del contrato (TF-IDF de descripciones, proporciones por categoría de riesgo, variables macro)
+- Las pasa por el mismo `StandardScaler` que usa el SVR de sobrecosto
+- El modelo SVR Linear predice cuánto espera que se equivoque el SVR de sobrecosto para *ese contrato específico*
+- Aplica el safety factor para garantizar cobertura mínima
+- El RMSE resultante se usa como σ del ruido Gaussiano en las 1000 iteraciones del Monte Carlo
 
-#### 8.6.3 Decisión del Factor
+**¿Por qué se necesita?**
+- La heurística anterior asignaba el mismo RMSE a todos los contratos con el mismo n_riesgos, ignorando diferencias en descripciones, categorías y contexto macro
+- Los buckets 21-30 y >30 tenían sobreestimación sistemática: asignaban 20-24 pp a contratos cuyo error real era ~10 pp
+- El RMSE Predictor mejora el MAE en +32.3% (8.66 vs 12.78 pp) al considerar el perfil completo del contrato
+
+**Características del modelo:**
+- **Algoritmo:** `SVR(kernel="linear", C=1.0)`
+- **Features:** 35 (30 TF-IDF + 5 de rango: IPC acumulado, TRM promedio, año inicio, año fin, duración)
+- **Target de entrenamiento:** `abs_error = |sobrecosto_real - svr_pred|` (error absoluto del SVR)
+- **Datos de entrenamiento:** 351 contratos históricos del pool SECOP I
+- **Escalador:** Mismo `StandardScaler` que el SVR de sobrecosto
+- **Archivo:** `models/rmse_predictor.pkl`
+- **Caché:** `@lru_cache(maxsize=1)` — se carga una vez y se reusa en todas las iteraciones MC
+- **Fallback:** Si el archivo no existe, usa la heurística por n_riesgos
+
+### 8.7 Safety Factor — Ajuste por Cobertura
+
+#### 8.7.1 Problema Identificado en Validación
+
+Al probar los 12 contratos con el RMSE Predictor crudo, se observó que **5 de 10 contratos** con validación real quedaban fuera del intervalo P10-P90. El predictor, al optimizar MAE, producía intervalos demasiado optimistas para contratos donde el SVR se equivocaba mucho.
+
+#### 8.7.2 Solución: Safety Factor
+
+Se implementó un factor de seguridad en `backend/quantitative_analysis.py:compute()`. El RMSE final es el máximo entre: (a) la predicción del modelo ML, (b) el 85% del valor heurístico, (c) un piso de 2 pp:
+
+```python
+rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)
+```
+
+#### 8.7.3 Decisión del Factor
 
 Se evaluaron tres factores de seguridad sobre los 12 contratos de validación:
 
@@ -225,9 +266,9 @@ Se evaluaron tres factores de seguridad sobre los 12 contratos de validación:
 - Los 3 que quedan fuera (C-010, C-017, C-043) son casos donde el SVR tiene error >19 pp — ni siquiera la heurística pura cubre C-043 (real 2.2% con P10=2.4%)
 - La cobertura del 70% en P10-P90 es esperable dado que el MC modela incertidumbre alrededor de la predicción SVR, no el error del SVR mismo
 
-### 8.7 Resultados de Validación — 12 Contratos (Julio 2026)
+### 8.8 Resultados de Validación — 12 Contratos (Julio 2026)
 
-#### 8.7.1 Cobertura con Safety Factor 0.85
+#### 8.8.1 Cobertura con Safety Factor 0.85
 
 | Contrato | n | Real | SVR | Error | RMSE | P10 | P50 | P90 | Cubre |
 |---|---|---|---|---|---|---|---|---|---|
@@ -245,7 +286,7 @@ Se evaluaron tres factores de seguridad sobre los 12 contratos de validación:
 
 **Cobertura: 7/10 (70%)**
 
-#### 8.7.2 Contratos Fuera del Intervalo
+#### 8.8.2 Contratos Fuera del Intervalo
 
 | Contrato | Real | SVR | Error | Causa |
 |---|---|---|---|---|
@@ -255,7 +296,7 @@ Se evaluaron tres factores de seguridad sobre los 12 contratos de validación:
 
 En los 3 casos, el error del SVR supera los 19 pp. El MC no puede compensar porque la predicción central está muy lejos del real. Incluso con la heurística pura (RMSE=16-20), C-043 quedaba fuera.
 
-### 8.8 Limitaciones
+### 8.9 Limitaciones
 
 1. Depende del SVR actual: si se re-entrena el SVR, el RMSE Predictor debe re-entrenarse también
 2. R² negativo (~-0.2): el modelo no explica la varianza del error, pero mejora la magnitud (MAE)
