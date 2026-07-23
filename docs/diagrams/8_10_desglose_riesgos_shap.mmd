@@ -1,24 +1,19 @@
 graph TD
-    subgraph Background["Background: 100 contratos de entrenamiento"]
-        BG["shap_background.pkl"]
+    subgraph TreeExplainer["shap.TreeExplainer (exacto, sin sampling)"]
+        TE["shap_values directos<br/>Mapeo features → riesgos<br/>TF-IDF invertido"]
     end
 
-    subgraph KernelExplainer["shap.KernelExplainer"]
-        KE["1000 samples<br/>Mapeo features → riesgos<br/>TF-IDF invertido"]
+    subgraph Output["Contribución por riesgo"]
+        O1["Cada riesgo recibe su valor Shapley exacto"]
+        O2["Suma SHAP = predicción - expected_value<br/>Validación: error &lt; 1e-10"]
     end
 
-    subgraph Output["Contribucion por riesgo"]
-        O1["Cada riesgo recibe su valor Shapley"]
-        O2["Reemplaza heuristica anterior:<br/>pred x prob x imp / sum(prob x imp)"]
-    end
-
-    subgraph Visualizacion["Visualizacion"]
+    subgraph Visualizacion["Visualización"]
         V1["Top 3 riesgos por contrato"]
-        V2["Distribucion SHAP global"]
-        V3["Contribucion en % y COP"]
+        V2["Distribución SHAP global"]
+        V3["Contribución en % y COP"]
     end
 
-    BG --> KE
-    KE --> O1
+    TE --> O1
     O1 --> O2
     O1 --> V1 & V2 & V3

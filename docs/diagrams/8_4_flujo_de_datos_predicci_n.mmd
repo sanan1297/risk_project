@@ -13,7 +13,7 @@ sequenceDiagram
     B->>ML: init_from_mlflow()
     ML-->>B: ModelVersion (run_id, version, experiment_id)
     B->>ML: load_artifacts() / load_permutation_importance()
-    ML-->>B: svr_regressor, classifier, scaler, features, rmse_predictor
+    ML-->>B: rf_model, classifier, scaler, features_38, rmse_predictor
     Note over B: Si MLflow no disponible:<br/>fallback a models/*.pkl
 
     U->>F: Sube CSV o pega texto
@@ -22,9 +22,9 @@ sequenceDiagram
     F->>F: spinner (cualitativo)
     F->>B: POST /predict (file + params)
     B->>FE: aggregate_risks(df)
-    FE-->>B: 35 features + id_contrato
+    FE-->>B: 38 features + id_contrato
     B->>P: predict(features)
-    P-->>B: SVR % + prob + alerta + factores
+    P-->>B: RF % + prob(RF Classifier) + alerta + factores
     B->>DB: INSERT predicción
     DB-->>B: history_id
     B-->>F: PrediccionSalida (con history_id)
@@ -35,12 +35,11 @@ sequenceDiagram
     F->>B: POST /predict/montecarlo (file + params + history_id)
     B->>FE: aggregate_risks(df)
     B->>QA: compute(df_contrato, n_iteraciones, valor_inicial, ...)
-    QA->>RP: rmse = max(rmse_pred, rmse_heur*0.85, 2.0)
-    RP-->>QA: RMSE dinámico (safety factor 0.85)
-    QA->>QA: MC: 1000 iter, Δ∈{-1,0,+1} en prob/imp
-    QA->>QA: SVR predict en cada iter + ruido N(0, RMSE)
-    QA->>QA: Tornado: perturba todas ±1, mide swing real
-    QA->>QA: SHAP KernelExplainer: 1000 samples, 100 bg
+    QA->>RP: rmse = max(rmse_pred, heur*0.85, 2.0)
+    RP-->>QA: RMSE dinámico SVR (safety factor 85%)
+    QA->>QA: MC: n_iter (default 500) con ruido N(0, RMSE)
+    QA->>QA: Tornado: perturba todas ±1, mide swing real RF
+    QA->>QA: SHAP TreeExplainer: exacto, sin sampling
     QA-->>B: percentiles, stats, histograma, tornado, desglose
     B->>DB: UPDATE mc_iteraciones + resultado_json
     B-->>F: MonteCarloSalida (% y COP si hay valor_inicial)

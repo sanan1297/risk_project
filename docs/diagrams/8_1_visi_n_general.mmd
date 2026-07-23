@@ -9,17 +9,17 @@ graph TB
 
         subgraph Backend["Backend — FastAPI (backend/)"]
             API[main.py<br/>REST API]
-            FE[feature_engineering.py<br/>Agregación de riesgos → 35 features]
-            PREDICT[predictor.py<br/>SVR RBF R² CV 0.068 + Logistic AUC 0.673]
+            FE[feature_engineering.py<br/>Agregación de riesgos → 38 features]
+            PREDICT[predictor.py<br/>RF 390 trees R² 0.622 + RF Classifier AUC 0.685]
             MLF[mlflow_tracker.py<br/>Carga desde MLflow<br/>fallback a local]
-            QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + Desglose SHAP]
+            QA[quantitative_analysis.py<br/>Monte Carlo + Tornado + SHAP TreeExplainer]
             HISTDB[history.py<br/>SQLite CRUD + resultado_json MC]
-            TRAIN[training_stats.py<br/>351 contratos, R², coeficientes]
+            TRAIN[training_stats.py<br/>575 contratos, 38 features, R², importancia]
             LABELS[feature_labels.py<br/>Labels legibles]
         end
 
         subgraph MLflowSrv["MLflow Server (puerto :5000)"]
-            MLREG[Model Registry<br/>risk-predictor-svr v1]
+            MLREG[Model Registry<br/>risk-predictor-rf v1]
             MLEXP[Experiment<br/>risk-predictor]
             MLART[Artifact Store<br/>modelos .pkl, metrics, params]
         end

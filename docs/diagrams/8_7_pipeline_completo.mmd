@@ -1,14 +1,16 @@
 graph TB
     A["SECOP I+II API"] --> B["unificar + depurar"]
-    B --> C["1,560 contratos"]
-    C --> D["PDF matrices → CSV"]
-    D --> E["6,525 riesgos → 351 contratos"]
-    E --> F["Feature Eng: 219 → 35"]
-    F --> G["SVR Entrenamiento"]
-    F --> H["RMSE Predictor"]
-    G --> I["MLflow Registry"]
-    H --> I
-    I --> J["FastAPI Backend"]
-    J --> K["MC + Tornado + SHAP"]
-    K --> L["Streamlit Frontend"]
-    L --> M["Usuario Final"]
+    B --> C["1,560 contratos con sobrecosto > 0"]
+    C --> D["PDF matrices de riesgo → CSV"]
+    D --> E["11,029 riesgos → 575 contratos"]
+    E --> F["Feature Eng: 38 features<br/>(30 RF-selected + 5 macro + 3 mitigación)"]
+    F --> G["RandomForest 390 trees<br/>Entrenamiento 100% datos"]
+    F --> H["RMSE Predictor SVR RBF"]
+    F --> I["RandomForest Classifier 100 trees"]
+    G --> J["MLflow Registry"]
+    H --> J
+    I --> J
+    J --> K["FastAPI Backend"]
+    K --> L["MC 500 iter + Tornado + SHAP TreeExplainer"]
+    L --> M["Streamlit Frontend"]
+    M --> N["Usuario Final"]

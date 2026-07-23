@@ -1,16 +1,16 @@
 graph TB
     subgraph Docker["Docker Compose"]
         subgraph Frontend["Frontend - Streamlit (:8501)"]
-            ST["Dashboard + Prediccion + Historial"]
+            ST["Dashboard + Predicción + Historial"]
         end
 
         subgraph Backend["Backend - FastAPI (:8003)"]
-            FA["main.py - REST API"]
-            FE["feature_engineering.py"]
-            PR["predictor.py - SVR + Logistic"]
-            RP["rmse_predictor.pkl - Safety 0.85"]
-            QA["quantitative_analysis.py - MC + SHAP"]
-            H["history.py - SQLite"]
+            FA["main.py - REST API 11 endpoints"]
+            FE["feature_engineering.py - 38 features"]
+            PR["predictor.py - RF 390 trees + RF Clf 100 trees"]
+            RP["rmse_predictor.pkl - SVR RBF + Safety 85%"]
+            QA["quantitative_analysis.py - MC + SHAP TreeExplainer"]
+            H["history.py - SQLite CRUD"]
         end
 
         subgraph MLflow["MLflow Server (:5000)"]
@@ -18,15 +18,15 @@ graph TB
         end
     end
 
-    subgraph Volumes["Volumenes"]
+    subgraph Volumes["Volúmenes"]
         DB["history.db"]
         MLD["mlflow_data"]
     end
 
     subgraph Local["Fallback models/"]
-        L1["svr_regressor.pkl"]
-        L2["rmse_predictor.pkl"]
-        L3["classifier + scaler + tfidf + shap_bg"]
+        L1["modelo_campeon.pkl (RF)"]
+        L2["rmse_predictor.pkl (SVR)"]
+        L3["classifier.pkl + scaler + tfidf + ipc_trm"]
     end
 
     ST -->|HTTP :8003| FA

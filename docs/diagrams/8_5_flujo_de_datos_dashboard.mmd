@@ -15,6 +15,6 @@ sequenceDiagram
     F->>B: GET /stats/training
     B->>Files: Lee matriz_clean.csv, permutation_importance.csv, ipc_trm.pkl
     Files-->>B: datos
-    B-->>F: total_contratos=351, contratos_pool_secop1, top_coeficientes, distribución sobrecosto, categorías, tipos, IPC/TRM, dist_n_riesgos, top_riesgosos
+    B-->>F: total_contratos=575, contratos_pool_secop1, top_features, distribución sobrecosto, categorías, tipos, IPC/TRM, dist_n_riesgos, top_riesgosos
     F->>F: Renderiza KPI cards + tabla + bar chart + distribución
     F-->>U: Dashboard completo
