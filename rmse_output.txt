@@ -1,0 +1,64 @@
+﻿Matriz riesgos: 6667 filas, 357 contratos
+Features del modelo: 35
+['tfidf_desarrollo', 'interaccion_prob_x_impacto', 'tfidf_insumos', 'prob_std', 'tfidf_expedicion', 'tfidf_materiales', 'imp_promedio', 'tfidf_obra', 'tfidf_ejecucion', 'tfidf_contrato', 'prop_tipo_operacional', 'prob_promedio', 'prop_cate_bajo', 'valor_inicial', 'tfidf_riesgo', 'tfidf_tecnicas', 'tfidf_municipio', 'tfidf_obras', 'tfidf_informacion', 'prop_fuen_externo', 'tfidf_cuando', 'tfidf_disenos', 'tfidf_ejecucion contrato', 'tfidf_calidad', 'tfidf_manejo', 'prop_cate_alto', 'tfidf_pago', 'prop_tipo_economico', 'prop_asig_entidad', 'tfidf_falta', 'anio_inicio', 'anio_fin', 'duracion', 'ipc_acumulado', 'trm_promedio']
+Macro: 357 contratos
+Columnas macro: ['anio_inicio', 'anio_fin', 'duracion', 'ipc_acumulado', 'trm_promedio', 'id_contrato']
+Construyendo features para todos los contratos...
+Features: (357, 37)
+Contratos: 357
+Dataset completo: (356, 38)
+EstadÝsticas del error absoluto (|real - svr|):
+count    356.000000
+mean      11.480046
+std       42.799621
+min        0.028743
+25%        1.319703
+50%        6.346222
+75%       14.392091
+max      794.145076
+Name: abs_error, dtype: float64
+
+RMSE global: 44.25 pp
+MAE global: 11.48 pp
+Error real por bucket vs RMSE heurÝstico:
+          n  error_prom  error_std  error_p90  rmse_asignado
+bucket                                                      
+1-10    100    8.141042   7.593118  17.941347           12.0
+11-20   122   15.764375  71.927884  22.084854           16.0
+21-30    97   10.072789  10.287860  24.621778           20.0
+>30      37   10.066970  11.540769  28.230916           24.0
+Train: 284, Test: 72
+Ridge                | MAE CV=19.79▒2.96 | R▓ CV=-6.124▒3.771 | Test MAE=17.62 R▓=-4.470
+Lasso                | MAE CV=19.95▒2.88 | R▓ CV=-6.273▒3.844 | Test MAE=17.68 R▓=-4.530
+ElasticNet           | MAE CV=19.74▒2.96 | R▓ CV=-6.086▒3.750 | Test MAE=17.53 R▓=-4.406
+SVR RBF              | MAE CV=9.93▒6.35 | R▓ CV=-0.159▒0.083 | Test MAE=8.39 R▓=-0.316
+SVR Linear           | MAE CV=10.14▒6.55 | R▓ CV=-0.135▒0.083 | Test MAE=8.49 R▓=-0.345
+Random Forest        | MAE CV=12.88▒5.29 | R▓ CV=-9.322▒10.457 | Test MAE=19.40 R▓=-29.728
+Gradient Boosting    | MAE CV=14.78▒5.44 | R▓ CV=-23.968▒27.606 | Test MAE=22.16 R▓=-80.963
+MLP                  | MAE CV=24.10▒5.63 | R▓ CV=-22.694▒22.680 | Test MAE=26.45 R▓=-49.617
+
+=== COMPARATIVA DE MODELOS ===
+           modelo       MAE CV            R▓ CV MAE test R▓ test
+            Ridge 19.79 ▒ 2.96   -6.124 ▒ 3.771    17.62  -4.470
+            Lasso 19.95 ▒ 2.88   -6.273 ▒ 3.844    17.68  -4.530
+       ElasticNet 19.74 ▒ 2.96   -6.086 ▒ 3.750    17.53  -4.406
+          SVR RBF  9.93 ▒ 6.35   -0.159 ▒ 0.083     8.39  -0.316
+       SVR Linear 10.14 ▒ 6.55   -0.135 ▒ 0.083     8.49  -0.345
+    Random Forest 12.88 ▒ 5.29  -9.322 ▒ 10.457    19.40 -29.728
+Gradient Boosting 14.78 ▒ 5.44 -23.968 ▒ 27.606    22.16 -80.963
+              MLP 24.10 ▒ 5.63 -22.694 ▒ 22.680    26.45 -49.617
+
+Mejor modelo: SVR RBF
+
+MÚtrica                        HeurÝstica      SVR RBF        
+------------------------------------------------------------
+MAE (pp)                       12.87           8.39
+Correlaci¾n con error real     0.006           -0.119         
+
+=== CONCLUSIËN ===
+MAE de la heurÝstica actual: 12.87 pp
+MAE del mejor modelo (SVR RBF) en test: 8.39 pp
+Mejora: 34.8%
+
+Implementaci¾n: cambiar backend/quantitative_analysis.py:_rmse_por_contrato()
+por un modelo .pkl cargado desde models/rmse_predictor.pkl

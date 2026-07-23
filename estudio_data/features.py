@@ -102,9 +102,17 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         row['interaccion_val_x_n'] = row.get('val_promedio', 0) * row['n_riesgos']
         row['interaccion_prob_x_impacto'] = row.get('prob_promedio', 0) * row.get('imp_promedio', 0)
 
-        # H. Proporción con plan de mitigación
+        # H. Mitigation plan features
         pm = g['plan_mitigacion'].astype(str).str.strip().replace('nan', '')
-        row['prop_plan_mitigacion'] = pm.ne('').mean()
+        has_pm = pm.ne('')
+        row['pct_riesgos_con_mitigacion'] = has_pm.mean()
+        non_empty = pm[has_pm]
+        if len(non_empty) > 0:
+            row['avg_longitud_mitigacion'] = non_empty.str.len().mean()
+        else:
+            row['avg_longitud_mitigacion'] = 0
+        codes = non_empty[non_empty.str.len() < 30]
+        row['n_distinct_codes_mitigacion'] = codes.nunique()
 
         rows.append(row)
 

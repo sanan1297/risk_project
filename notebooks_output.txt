@@ -1,0 +1,305 @@
+============================================================
+modelado_v2.ipynb - ROC & Classifier
+============================================================
+--- Cell 1 ---
+Librerias cargadas correctamente
+
+--- Cell 3 ---
+Contratos: 350  |  Features: 33  |  Target: sobrecosto
+Media: 25.30%  |  Std: 17.82%  |  Min: 0.00%  |  Max: 114.66%
+Sobrecosto >25%: 150 contratos (42.9%)
+
+--- Cell 5 ---
+Ridge final (CV) ? alpha=323.7458
+R? en todos los datos: 0.1607
+RMSE en todos los datos: 16.32 pp
+
+--- Cell 6 ---
+Top 10 coeficientes POSITIVOS (aumentan sobrecosto):
+
+--- Cell 6 ---
+
+Top 10 coeficientes NEGATIVOS (disminuyen sobrecosto):
+
+--- Cell 8 ---
+AUC-ROC (5-fold CV): 0.639 ? 0.071
+Accuracy (5-fold CV): 0.574
+
+--- Cell 9 ---
+AUC-ROC (todos los datos): 0.768
+
+--- Cell 11 ---
+Classification Report:
+              precision    recall  f1-score   support
+
+ Bajo (<25%)       0.76      0.70      0.73       200
+ Alto (>25%)       0.64      0.71      0.67       150
+
+    accuracy                           0.71       350
+   macro avg       0.70      0.71      0.70       350
+weighted avg       0.71      0.71      0.71       350
+
+Umbral optimo (Youden): 0.500
+  => TPR=0.707, FPR=0.295
+
+--- Cell 13 ---
+Primeros 10 contratos:
+
+--- Cell 13 ---
+
+Error absoluto promedio (MAE): 13.27 pp
+Contratos con alerta correcta: 0       True
+1       True
+2       True
+3       True
+4       True
+       ...  
+345     True
+346    False
+347    False
+348     True
+349     True
+Length: 350, dtype: bool
+Clasificaciones correctas (umbral 0.5): 247/350 (70.6%)
+
+--- Cell 15 ---
+Validacion manual ? contratos de prueba:
+  C-017: Real=53.1% | Ridge=33.0% | Prob.Riesgo=66.0% ? ?
+  C-043: Real=2.2% | Ridge=29.8% | Prob.Riesgo=81.4% ? ?
+  C-128: Real=30.4% | Ridge=31.4% | Prob.Riesgo=77.9% ? ?
+
+--- Cell 17 ---
+Artefactos guardados en ../models
+  coeficientes_ridge.csv (1.1 KB)
+  feature_names.pkl (0.6 KB)
+  ipc_trm.pkl (0.2 KB)
+  ridge_classifier.pkl (1.1 KB)
+  ridge_model.pkl (1.3 KB)
+  ridge_regressor.pkl (1.3 KB)
+  scaler.pkl (1.4 KB)
+  tfidf_vectorizer.pkl (5.1 KB)
+
+
+============================================================
+modelo_final.ipynb - Benchmark v2
+============================================================
+--- Cell 1 ---
+XGBoost version: 3.3.0
+GPU disponible para XGBoost: SI
+Listo
+
+--- Cell 3 ---
+Contratos: 350 | Features: 35
+Columnas: ['id_contrato', 'sobrecosto', 'tfidf_desarrollo', 'interaccion_prob_x_impacto', 'tfidf_insumos', 'prob_std', 'tfidf_expedicion', 'tfidf_materiales', 'imp_promedio', 'tfidf_cualquier', 'tfidf_ejecucion', 'tfidf_contrato', 'prop_tipo_operacional', 'prob_promedio', 'prop_cate_bajo', 'valor_inicial', 'tfidf_riesgo', 'tfidf_tecnicas', 'tfidf_municipio', 'tfidf_obras', 'tfidf_informacion', 'prop_fuen_externo', 'tfidf_cuando', 'tfidf_disenos', 'tfidf_ejecucion contrato', 'tfidf_calidad', 'tfidf_manejo', 'prop_cate_alto', 'tfidf_pago', 'prop_tipo_economico', 'prop_asig_entidad', 'tfidf_falta', 'anio', 'ipc', 'trm']
+
+--- Cell 3 (result) ---
+  id_contrato  sobrecosto  tfidf_desarrollo  interaccion_prob_x_impacto  \
+0       C-001       28.56          0.131124                    7.465278   
+1       C-002        4.80          0.193673                    6.307479   
+2       C-003       53.10          0.000000                    3.859375   
+3       C-004       26.33          0.000000                    1.820000   
+4       C-005       37.28          0.000000                    7.587891   
+
+   tfidf_insumos  prob_std  tfidf_expedicion  tfidf_materiales  imp_promedio  \
+0       0.000000  0.276385          0.000000          0.000000      3.583333   
+1       0.000000  0.848659          0.107402          0.000000      3.631579   
+2       0.000000  0.695971          0.000000          0.306124      1.625000   
+3       0.117717  0.458258          0.000000          0.000000      1.400000   
+4       0.052372  0.582961          0.000000          0.086157      3.468750   
+
+   tfidf_cualquier  ...  tfidf_calidad  tfidf_manejo  prop_cate_alto  \
+0         0.000000  ...       0.232896      0.000000        0.666667   
+1         0.000000  ...       0.000000      0.000000        0.263158   
+2         0.000000  ...       0.207766      0.000000        0.125000   
+3         0.000000  ...       0.000000      0.129500        0.000000   
+4         0.062678  ...       0.000000      0.057615        0.781250   
+
+   tfidf_pago  prop_tipo_economico  prop_asig_entidad  tfidf_falta  anio  \
+0    0.000000             0.166667           0.083333     0.000000  2018   
+1    0.000000             0.052632           0.315789     0.000000  2019   
+2    0.000000             0.000000           0.125000     0.000000  2019   
+3    0.000000             0.200000           0.100000     0.000000  2018   
+4    0.121007             0.062500           0.125000     0.251524  2019   
+
+    ipc     trm  
+0  3.18  2955.7  
+1  3.80  3281.1  
+2  3.80  3281.1  
+3  3.18  2955.7  
+4  3.80  3281.1  
+
+[5 rows x 35 columns]
+--- Cell 4 ---
+Media: 25.3%  |  >200%: 0 contratos
+
+--- Cell 6 ---
+Outliers >200% eliminados: 0
+Train: 245 | Test: 105 | Features: 33
+
+--- Cell 9 ---
+Modelo                   RMSE      MAE      R2   Tiempo
+-------------------------------------------------------
+
+--- Cell 10 ---
+=======================================================
+  GRUPO 1 ? Lineales + KNN (n_iter=200)
+=======================================================
+Ridge                  15.6~ 1.1   12.8  0.103~0.080    0.9s
+Lasso                  15.9~ 1.2   13.1  0.069~0.091    0.5s
+ElasticNet             15.6~ 1.1   12.9  0.094~0.071    0.5s
+KNN                    16.2~ 1.2   13.2  0.035~0.061    0.5s
+
+--- Cell 11 ---
+=======================================================
+  GRUPO 2a ? Arboles (n_iter=500)
+=======================================================
+DecisionTree           17.6~ 2.0   14.6  -0.146~0.156    1.1s
+RandomForest           15.7~ 1.3   12.9  0.091~0.097  104.8s
+
+--- Cell 12 ---
+=======================================================
+  GRUPO 2b ? Gradiente (n_iter=200)
+=======================================================
+GradientBoosting       15.8~ 1.3   12.9  0.072~0.103   33.8s
+XGBoost_GPU            15.8~ 1.2   13.0  0.072~0.090  161.5s
+
+--- Cell 13 ---
+=======================================================
+  GRUPO 3 ? SVR + MLP (n_iter=50)
+=======================================================
+SVR                    15.8~ 1.1   12.6  0.072~0.036    0.4s
+MLP                    16.1~ 2.1   13.1  0.032~0.250    4.0s
+
+--- Cell 15 ---
+
+Campeon Nested CV: Ridge (R2=0.103~0.080)
+
+--- Cell 17 ---
+Top 4: ['Ridge', 'ElasticNet', 'RandomForest', 'SVR']
+
+  Ridge              vs ElasticNet        : t=-1.114, p=0.3276 n.s.
+  Ridge              vs RandomForest      : t=-0.246, p=0.8181 n.s.
+  Ridge              vs SVR               : t=-0.659, p=0.5460 n.s.
+  ElasticNet         vs RandomForest      : t=-0.055, p=0.9588 n.s.
+  ElasticNet         vs SVR               : t=-0.510, p=0.6370 n.s.
+  RandomForest       vs SVR               : t=-0.376, p=0.7259 n.s.
+
+--- Cell 19 ---
+Mejores params (Ridge):
+  m__alpha: 98.77700294007911
+
+Hold-out: RMSE=20.82  MAE=16.13  R2=-0.043
+Modelo guardado en resultados_v2/modelo_campeon_halving.pkl
+
+--- Cell 22 ---
+=== SELECCION MULTIOBJETIVO ===
+Modelo                   R2 R2_std   T(s) Comp Interp   Score
+------------------------------------------------------------
+Ridge                0.103   1.07     1     2     5  0.190
+Lasso                0.069   1.21     0     2     5  0.177
+KNN                  0.035   1.21     1     1     4  0.163
+ElasticNet           0.094   1.09     0     2     4  0.137
+DecisionTree         -0.146   1.97     1     2     5  0.090
+SVR                  0.072   1.12     0     2     2  0.028
+GradientBoosting     0.072   1.30    34     3     3 -0.006
+RandomForest         0.091   1.33   105     3     4 -0.019
+MLP                  0.032   2.08     4     3     1 -0.092
+XGBoost_GPU          0.072   1.16   162     3     3 -0.133
+
+Campeon por R2 puro: Ridge
+Campeon multiobjetivo: Ridge (score=0.190)
+Conclusion: Coinciden ambos criterios
+
+--- Cell 26 ---
+Residuals: mean=1.7%, std=20.9%
+
+--- Cell 28 ---
+Background dataset has 105 samples but max_samples=100. Subsampling to 100 samples for SHAP value computation. To use all samples, set max_samples=105 when initializing the masker.
+
+--- Cell 28 ---
+SHAP summary guardado.
+
+--- Cell 30 ---
+============================================================
+  RESUMEN FINAL - MODELADO V2 (33 FEATURES)
+============================================================
+Dataset: 350 contratos | Features: 33
+Train: 245 | Test: 105
+
+Benchmarking (Nested CV 5x5, 200 iter):
+Modelo                   RMSE       R2     T(s)
+----------------------------------------------
+Ridge                  15.6~ 1.1  0.103~0.080    0.9s
+Lasso                  15.9~ 1.2  0.069~0.091    0.5s
+ElasticNet             15.6~ 1.1  0.094~0.071    0.5s
+KNN                    16.2~ 1.2  0.035~0.061    0.5s
+DecisionTree           17.6~ 2.0 -0.146~0.156    1.1s
+RandomForest           15.7~ 1.3  0.091~0.097  104.8s
+GradientBoosting       15.8~ 1.3  0.072~0.103   33.8s
+XGBoost_GPU            15.8~ 1.2  0.072~0.090  161.5s
+SVR                    15.8~ 1.1  0.072~0.036    0.4s
+MLP                    16.1~ 2.1  0.032~0.250    4.0s
+
+Modelo campeon R2: Ridge
+  R2 Nested CV: 0.103 +- 0.080
+  RMSE Nested CV: 15.6 +- 1.1
+
+Seleccion Multiobjetivo:
+  Campeon balanceado: Ridge
+
+--- Cell 32 ---
+============================================================
+  PASO 1 + 2: INTERACCIONES + LOG-TARGET
+============================================================
+Interacciones agregadas: +3 columnas
+Train: 280 | Test: 70 | Features: 36
+
+Modelo                   RMSE      MAE      R2   Tiempo
+-------------------------------------------------------
+Ridge                  18.5~ 2.6   14.2  -0.094~0.072    0.4s
+ElasticNet             18.8~ 2.4   14.4  -0.133~0.051    0.5s
+RandomForest           18.3~ 2.6   14.0  -0.067~0.085   44.7s
+
+--- Mejora vs Original ---
+Ridge               : R2 orig=0.103  ->  R2 opt=-0.094  (-0.198)
+ElasticNet          : R2 orig=0.094  ->  R2 opt=-0.133  (-0.227)
+RandomForest        : R2 orig=0.091  ->  R2 opt=-0.067  (-0.158)
+
+--- Cell 33 ---
+============================================================
+  PASO 3: COEFICIENTES RIDGE + LIMPIEZA DE FEATURES
+============================================================
+Alpha optimo: 568.9866
+
+--- TOP 10 que AUMENTAN el sobrecosto ---
+              feature     coef
+           tfidf_pago 0.036475
+     tfidf_desarrollo 0.033569
+        tfidf_disenos 0.030827
+        tfidf_calidad 0.027519
+prop_tipo_operacional 0.022312
+       tfidf_tecnicas 0.022239
+       prop_cate_alto 0.021846
+          tfidf_falta 0.018592
+        prob_promedio 0.015980
+          tfidf_obras 0.014189
+
+--- TOP 10 que DISMINUYEN el sobrecosto ---
+                 feature      coef
+tfidf_ejecucion contrato -0.015186
+         tfidf_municipio -0.016991
+        tfidf_materiales -0.019179
+                prob_std -0.019234
+          trm_x_prob_std -0.022005
+         tfidf_ejecucion -0.026723
+         tfidf_cualquier -0.034394
+           tfidf_insumos -0.034396
+            tfidf_manejo -0.044413
+       tfidf_informacion -0.048966
+
+Features con coef ~0 (1): ['prop_cate_bajo']
+Features a mantener: 35
+
+--- Ridge post-limpieza (Hold-out) ---
+RMSE: 18.9 | MAE: 14.6 | R2: -0.112
+Features eliminadas: 1

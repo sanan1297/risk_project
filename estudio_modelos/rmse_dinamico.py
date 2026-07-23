@@ -161,6 +161,7 @@ real_df = matriz.groupby("id_contrato", sort=False).agg(
 
 # Merge features + real
 data = features_df.merge(real_df, on="id_contrato", how="inner")
+data = data.dropna(subset=["sobrecosto"])
 print(f"Dataset completo: {data.shape}")
 
 # %%
