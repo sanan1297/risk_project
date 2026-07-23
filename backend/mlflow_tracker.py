@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
 MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "risk-predictor")
-MLFLOW_MODEL_NAME = os.environ.get("MLFLOW_MODEL_NAME", "risk-predictor-svr")
+MLFLOW_MODEL_NAME = os.environ.get("MLFLOW_MODEL_NAME", "risk-predictor-rf")
 FALLBACK_MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
 _MODEL_REGISTRY: dict = {
@@ -41,7 +41,7 @@ def load_artifacts():
 def _load_from_local():
     logger.info("Loading models from local files (%s)", FALLBACK_MODELS_DIR)
     return (
-        joblib.load(FALLBACK_MODELS_DIR / "svr_regressor.pkl"),
+        joblib.load(FALLBACK_MODELS_DIR / "modelo_campeon.pkl"),
         joblib.load(FALLBACK_MODELS_DIR / "classifier.pkl"),
         joblib.load(FALLBACK_MODELS_DIR / "scaler.pkl"),
         joblib.load(FALLBACK_MODELS_DIR / "feature_names.pkl"),
@@ -73,7 +73,7 @@ def _load_from_mlflow():
 
     logger.info("Loading model %s v%s from MLflow (run_id=%s)", MLFLOW_MODEL_NAME, mv.version, run_id)
     return (
-        joblib.load(artifact_path / "svr_regressor.pkl"),
+        joblib.load(artifact_path / "modelo_campeon.pkl"),
         joblib.load(artifact_path / "classifier.pkl"),
         joblib.load(artifact_path / "scaler.pkl"),
         joblib.load(artifact_path / "feature_names.pkl"),

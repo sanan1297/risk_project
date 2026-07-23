@@ -8,127 +8,179 @@ Predicción de sobrecostos en contratos públicos colombianos usando matrices de
 ```
 SECOP I/II API → Extracción → Matrices de Riesgo (PDF → LLM → CSV)
                                         ↓
-                        Feature Engineering (351 contratos, 35 features)
+                        Feature Engineering (575 contratos, 38 features)
                                         ↓
-                           SVR RBF (R² CV 0.068, AUC 0.673) + Monte Carlo
+              RandomForest (R²=0.622 full) + RandomForestClassifier (AUC=0.591)
                                         ↓
                               Streamlit App (Dashboard + Predicción + Historial)
 ```
 
-El pipeline descarga contratos de obra pública desde las APIs de SECOP, extrae sus matrices de riesgo, entrena un modelo **SVR con kernel RBF** para estimar el sobrecosto porcentual usando **35 features (30 TF-IDF + 5 de rango de fechas)**, y despliega un dashboard interactivo con análisis cualitativo y cuantitativo. El R² CV (5-fold) es de **0.068**, y el R² in-sample (full training) de **0.417**.
+El pipeline descarga contratos de obra pública desde las APIs de SECOP, extrae sus matrices de riesgo, entrena un stack de modelos (RandomForest + RandomForestClassifier + RMSE Predictor) para estimar el sobrecosto porcentual usando **38 features (30 RF-selected + 5 de rango de fechas + 3 de mitigación)**, y despliega un dashboard interactivo con análisis cualitativo y cuantitativo.
+
+## Dataset
+
+| Métrica | Valor |
+|---|---|
+| Contratos entrenados | 575 |
+| Riesgos en matriz (`docs/matriz.csv`) | 11,029 |
+| Riesgos filtrados (outliers >200% eliminados) | 10,987 |
+| Features | 38 (30 RF-selected + 5 macro rango + 3 mitigación) |
+| Sobrecosto promedio | 24.3% |
+| Sobrecosto mediana | 19.0% |
+| Alto riesgo (>25%) | 40.4% |
 
 ## Resultados del Modelo
 
-| Métrica | Valor | Nota |
+| Componente | Modelo | Métrica clave | Archivo |
 |---|---|---|---|
-| Modelo | **SVR (kernel RBF, C=10, gamma=scale)** | |
-| **R² CV (5-fold)** | **0.068** | **Métrica real de generalización** |
-| R² (full training) | 0.417 | In-sample (entrena y predice sobre los mismos datos) |
-| AUC (LogisticRegression CV) | **0.673** | |
-| RMSE | **17.1 pp** | |
-| Features | **35 (30 TF-IDF + 5 rango fechas)** | |
-| Interpretabilidad | **SHAP (KernelExplainer, 1000 samples) + Permutation importance** | |
+| **Regresor** | **RandomForest** (390 trees, max_depth=19, max_features='log2') | R² nested CV=0.235, R² full=0.622, RMSE=11.4 pp | `modelo_campeon.pkl` |
+| **Clasificador** (>25%) | **RandomForestClassifier** (100 trees, max_depth=10, class_weight='balanced') | AUC nested CV=0.591 | `classifier.pkl` |
+| **RMSE Predictor** | **SVR RBF** (C=1.0, gamma=scale) | MAE=7.98 pp (benchmark CV) | `rmse_predictor.pkl` |
+| Features | 38 (30 RF-selected + 5 rango fechas + 3 mitigación) | | |
+| Interpretabilidad | SHAP (TreeExplainer) + Permutation importance | | |
 
 ### Arquitectura de tres capas
 
-1. **SVR** — predicción central del sobrecosto % usando 35 features agregadas (promedios de prob/impacto, proporciones por tipo, TF-IDF, IPC acumulado compuesto, TRM promedio, duración)
-2. **Análisis cuantitativo** — Monte Carlo (1000 iteraciones, perturbación discreta ±1, ruido Gaussiano con **RMSE variable según complejidad del contrato**), Tornado por tipo, Desglose individual
-3. **Interpretabilidad local (SHAP)** — cada riesgo individual recibe su contribución real a `pred_base` vía valores Shapley sobre el SVR. Reemplaza la heurística anterior `peso = prob×imp / Σ(prob×imp)` que era independiente del modelo.
+1. **RandomForest** — predicción central del sobrecosto % usando 38 features agregadas
+2. **Análisis cuantitativo** — Monte Carlo (iteraciones configurables, ruido Gaussiano con **RMSE dinámico** SVR RBF), Tornado por tipo, Desglose SHAP individual
+3. **Interpretabilidad local (SHAP)** — cada riesgo recibe su contribución real vía valores Shapley sobre el RandomForest (TreeExplainer)
 
 ### Traza de la Investigación
 
-El modelo pasó por 3 fases antes de llegar a SVR:
-
 | Fase | Modelo | Features | R² | ¿Qué pasó? |
 |---|---|---|---|---|
-| v1–v3 | **Ridge** | 33 (año único) | **0.149** | Funcionaba con año único, pero forzaba todos los contratos a un solo año |
-| v4a | **Ridge** (rango) | 35 (rango fechas) | 0.066 CV | **No funcionó** — Ridge no captura relaciones no lineales entre duración, IPC compuesto y TRM |
-| **v4b** | **SVR RBF** | 35 (rango fechas) | **0.068 CV** | **Campeón final** — kernel RBF sí modela las no-linealidades del rango temporal |
+| v1–v3 | **Ridge** | 33 (año único) | 0.149 | Funcionaba con año único |
+| v4a | **Ridge** (rango) | 35 (rango fechas) | 0.066 CV | No capturó no-linealidades |
+| v4b | **SVR RBF** | 35 (rango fechas) | 0.068 CV | Campeón anterior |
+| v5 | **Ridge** | 35 (rango fechas) | 0.086 hold-out | Campeón v5 |
+| **v6** | **RandomForest** | 38 (30 RF-selected + 5 rango + 3 mitigación) | **0.235 nested CV** | **Campeón actual** |
 
-### Mejora: RMSE Dinámico (Predictor de Error ML)
+### RMSE Predictor (Error ML)
 
-El RMSE del Monte Carlo ya no es una heurística fija por bucket de `n_riesgos`. Se entrenó un **segundo SVR (kernel linear)** que predice el error esperado del SVR de sobrecosto usando las mismas 35 features:
+El ruido del Monte Carlo se predice con **SVR RBF** entrenado sobre residuales del RandomForest (`|real - rf_pred|`):
 
-| Método | MAE | Mejora |
+| Método | MAE |
+|---|---|
+| Heurística (bucket n_riesgos) | 12.0–24.0 pp |
+| **SVR RBF** | **7.98 pp** |
+
+Benchmark de 6 meta-modelos: SVR RBF ganó (R²=−0.145, MAE=7.98). Safety factor: `rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)`.
+
+## Benchmark Completo (10 modelos, nested CV 5-fold, 575 contratos)
+
+### Regresión
+
+| Modelo | R² CV | RMSE CV | MAE CV |
+|---|---|---|---|
+| Ridge | 0.026 ± 0.078 | 18.34 ± 2.74 | 14.25 |
+| Lasso | 0.026 ± 0.078 | 18.35 ± 2.74 | 14.25 |
+| ElasticNet | 0.029 ± 0.077 | 18.32 ± 2.74 | 14.24 |
+| KNN | −0.030 ± 0.081 | 18.76 ± 1.97 | 15.03 |
+| DecisionTree | −0.742 ± 0.369 | 24.23 ± 2.92 | 17.80 |
+| **RandomForest** | **0.045 ± 0.056** | **18.15 ± 2.49** | **14.18** |
+| GradientBoosting | −0.092 ± 0.129 | 19.32 ± 2.40 | 14.71 |
+| XGBoost | −0.008 ± 0.115 | 18.61 ± 2.64 | 14.16 |
+| SVR | 0.048 ± 0.080 | 18.15 ± 2.84 | 13.74 |
+| MLP | −0.782 ± 0.289 | 24.68 ± 3.68 | 18.18 |
+
+Selección final: RandomForest por mejor R² CV (0.045) y R² en 100% datos (0.622).
+
+### Clasificación (>25% sobrecosto)
+
+| Modelo | AUC CV | Acc CV |
 |---|---|---|
-| Heurística anterior (bucket) | 12.78 pp | — |
-| RMSE Predictor (SVR Linear) | **8.66 pp** | **+32.3%** |
+| Ridge (Logistic) | 0.665 ± 0.046 | 0.619 |
+| KNN | 0.600 ± 0.066 | 0.587 |
+| DecisionTree | 0.576 ± 0.049 | 0.586 |
+| **RandomForest** | **0.685 ± 0.034** | **0.630** |
+| GradientBoosting | 0.629 ± 0.048 | 0.610 |
+| XGBoost | 0.654 ± 0.021 | 0.633 |
+| SVC | 0.661 ± 0.048 | 0.617 |
+| MLP | 0.609 ± 0.032 | 0.601 |
 
-El predictor se entrenó sobre los residuales de los 351 contratos históricos (`|sobrecosto_real - svr_pred|`) y se guardó en `models/rmse_predictor.pkl`. En inferencia, calcula el RMSE dinámico para cada contrato según su perfil de riesgos (TF-IDF, categorías, macro), reemplazando la tabla estática por bucket.
+Selección: RandomForestClassifier (AUC CV=0.685, mejor ranking).
 
-**Safety Factor (0.85):** `rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)` — garantiza que el RMSE nunca baje del 85% del valor heurístico, manteniendo cobertura del 70% (7/10 contratos) en validación. Fallback automático a la heurística si el modelo no está disponible.
+### RMSE Predictor (meta-modelo de error)
 
-### Pruebas de Validación (Julio 2026)
+| Modelo | R² CV | MAE CV |
+|---|---|---|
+| Ridge | −0.084 ± 0.094 | 8.26 |
+| Lasso | −0.082 ± 0.094 | 8.25 |
+| ElasticNet | −0.078 ± 0.095 | 8.24 |
+| KNN | −0.283 ± 0.239 | 9.03 |
+| DecisionTree | −1.368 ± 0.993 | 10.62 |
+| RandomForest | −0.177 ± 0.141 | 8.43 |
+| GradientBoosting | −0.230 ± 0.152 | 8.61 |
+| **SVR** | **−0.145 ± 0.059** | **7.98** |
+| MLP | −2.767 ± 1.494 | 15.33 |
 
-**11 contratos de prueba (10 con validación real) — MAE global: 10.5 pp — Aciertos de alerta: 7/10 — RMSE dinámico con safety factor 0.85**
+Selección: SVR RBF (mejor MAE 7.98 pp).
 
-| Contrato | Real | SVR | Error | P50 | P90-P10 | RMSE | Alerta |
-|---|---|---|---|---|---|---|---|---|---|
-| C-001 | 28.6% | 25.01% | −3.6 | 24.3% | 35.7 pp | 13.6 | ALTO RIESGO ✅ |
-| C-010 | 37.3% | 16.84% | −20.5 | 16.8% | 34.6 pp | 13.6 | RIESGO MODERADO ❌ |
-| C-017 | 53.1% | 33.16% | −19.9 | 32.9% | 34.8 pp | 13.6 | ALTO RIESGO ✅ |
-| C-043 | 2.2% | 28.54% | +26.3 | 28.3% | 44.0 pp | 17.0 | ALTO RIESGO ❌ |
-| C-128 | 30.4% | 26.31% | −4.1 | 26.4% | 35.2 pp | 13.6 | ALTO RIESGO ✅ |
-| C-360 | 10.1% | 15.55% | +5.4 | 16.4% | 34.7 pp | 13.6 | RIESGO MODERADO ✅ |
-| C-361 | 19.1% | 16.99% | −2.1 | 17.7% | 44.1 pp | 17.0 | ALTO RIESGO ❌ |
-| C-362 | 4.4% | 9.54% | +5.2 | 10.1% | 42.9 pp | 17.0 | RIESGO MODERADO ✅ |
-| C-363 | 7.2% | 15.13% | +7.9 | 16.1% | 34.8 pp | 13.6 | RIESGO MODERADO ✅ |
-| C-364 | 20.8% | 10.85% | −10.0 | 11.7% | 52.7 pp | 20.4 | RIESGO MODERADO ✅ |
-| C-365 | — | 28.16% | — | 28.1% | 43.7 pp | 17.0 | ALTO RIESGO 🔮 |
+## Top 10 Features (RandomForest)
+
+| # | Feature | Importancia | Tipo |
+|---|---|---|---|
+| 1 | `val_std` | 0.048 | Desviación valoración |
+| 2 | `valor_inicial` | 0.044 | Valor del contrato |
+| 3 | `val_promedio` | 0.044 | Valoración promedio |
+| 4 | `imp_promedio` | 0.043 | Impacto promedio |
+| 5 | `suma_impacto` | 0.041 | Suma impactos |
+| 6 | `tfidf_ejecución` | 0.038 | TF-IDF ejecución |
+| 7 | `tfidf_municipio` | 0.034 | TF-IDF municipio |
+| 8 | `avg_longitud_mitigacion` | 0.034 | Longitud mitigación prom. |
+| 9 | `tfidf_demoras` | 0.033 | TF-IDF demoras |
+| 10 | `imp_std` | 0.032 | Desviación impacto |
 
 ## Arquitectura
 
 ```
 risk_project/
 ├── backend/
-│   ├── main.py                   # FastAPI REST API (10 endpoints)
+│   ├── main.py                   # FastAPI REST API (11 endpoints)
 │   ├── schemas.py                # Pydantic models
-│   ├── predictor.py              # SVR + LogisticRegression (permutation importance)
-│   ├── feature_engineering.py    # Agregación de riesgos → 35 features (rango fechas)
-│   ├── quantitative_analysis.py  # Monte Carlo + Tornado + SHAP desglose por riesgo
+│   ├── predictor.py              # RandomForest (38 features, permutation importance)
+│   ├── feature_engineering.py    # Agregación de riesgos → 38 features (rango fechas + mitigación)
+│   ├── quantitative_analysis.py  # Monte Carlo + RMSE dinámico + Tornado + SHAP TreeExplainer
 │   ├── history.py                # SQLite CRUD + stats + resultado_json MC
-│   ├── training_stats.py         # Estadísticas de entrenamiento (351 contratos)
-│   ├── mlflow_tracker.py          # Carga de modelos desde MLflow (fallback local)
-│   └── feature_labels.py         # Labels legibles para features
+│   ├── training_stats.py         # Estadísticas de entrenamiento (575 contratos)
+│   ├── mlflow_tracker.py         # Carga modelo_campeon.pkl desde MLflow (fallback local)
+│   └── feature_labels.py         # Labels legibles para features técnicas
 ├── frontend/
 │   └── streamlit_app.py          # App Streamlit (Dashboard + Predicción + Historial)
-├── models/                       # Artefactos del modelo SVR
-│   ├── svr_regressor.pkl         # SVR (R² CV 0.068, C=10, gamma=scale)
-│   ├── classifier.pkl            # LogisticRegression (AUC 0.673)
-│   ├── ridge_reference.pkl       # Ridge de referencia (coeficientes)
-│   ├── permutation_importance.csv# Importancia global (10 reps)
+├── models/
+│   ├── modelo_campeon.pkl        # RandomForest (390 trees, R²=0.622)
+│   ├── classifier.pkl            # RandomForestClassifier (AUC=0.685)
+│   ├── rmse_predictor.pkl        # SVR RBF para RMSE dinámico (MAE=7.98 pp)
 │   ├── scaler.pkl                # StandardScaler
-│   ├── feature_names.pkl         # 35 feature names
+│   ├── feature_names.pkl         # 38 feature names
+│   ├── feature_importances_rf.csv# Importancia de features (RandomForest)
+│   ├── permutation_importance.csv# Importancia global por permutación
 │   ├── tfidf_vectorizer.pkl      # Vectorizador TF-IDF
-│   ├── ipc_trm.pkl               # IPC/TRM por año
-│   └── shap_background.pkl       # 100 contratos de background para SHAP KernelExplainer
+│   └── ipc_trm.pkl               # IPC/TRM por año
 ├── scripts/
-│   ├── train_final_model.py      # Entrenamiento SVR reproducible
-│   └── compute_ipc_range.py      # Cálculo IPC acumulado + TRM promedio por rango
-├── Dockerfile                    # Imagen Python 3.12-slim + uv (multipropósito)
-├── docker-compose.yml            # 3 servicios: mlflow, backend, frontend
-├── .dockerignore
-├── estudio_data/                 # Normalización y EDA
-├── notebooks/
-│   ├── evaluacion_modelos.py     # Benchmark Ridge vs SVR vs RF vs MLP
-│   └── test_svr_shap.py          # Evaluación SVR + permutation importance
+│   ├── train_production.py       # Entrenamiento final (100% datos, 3 modelos)
+│   ├── consolidar_38_features.py # Genera consolidado_38_features.csv
+│   ├── generate_model_artifacts.py# feature_names, permutation_importance, feature_importances_rf
+│   └── enrich_test_contracts.py  # Enriquece test contracts con mitigaciones
 ├── docs/
 │   ├── proceso.md                # Documentación completa del proceso
-│   ├── modelo.md                 # Traza de investigación del modelo (Ridge → SVR)
-│   ├── contratos_macro.csv       # Features de rango por contrato
-│   ├── matriz.csv                # Matrices de riesgo originales
-│   └── matriz_clean.csv          # 6,525 riesgos normalizados, 351 contratos
-├── tests/
-│   ├── plan_de_pruebas.md        # Plan y resultados de validación (4 grupos: A-D)
-│   └── data/                     # CSVs de prueba (Grupos A, B, C, D)
-└── contratos/                    # Datos SECOP cache y depurados (excluidos de git)
+│   ├── modelo.md                 # Traza de investigación del modelo
+│   ├── matriz.csv                # Matrices de riesgo originales (11,029 riesgos)
+│   ├── matriz_clean.csv          # 7,914 riesgos normalizados, 429 contratos
+│   ├── consolidado_38_features.csv # 575 contratos × 38 features — listo para ML
+│   └── contratos_macro.csv       # Features de rango por contrato
+├── Dockerfile                    # Imagen Python 3.12-slim + uv
+├── docker-compose.yml            # 3 servicios: mlflow, backend, frontend
+└── tests/
+    ├── plan_de_pruebas.md        # Plan y resultados de validación
+    └── data/enriched/            # CSVs de prueba con mitigaciones
 ```
 
 ### API Endpoints
 
 | Método | Endpoint | Descripción |
 |---|---|---|
-| `POST` | `/predict` | Predecir sobrecosto desde CSV o texto (SVR + alerta + factores) |
+| `POST` | `/predict` | Predecir sobrecosto desde CSV o texto (RF + alerta + factores) |
 | `POST` | `/predict/montecarlo` | Simulación Monte Carlo + tornado por tipo + desglose por riesgo |
 | `GET` | `/history` | Historial paginado (15/page) de predicciones |
 | `GET` | `/history/{id}` | Predicción individual con resultado_json del MC |
@@ -142,8 +194,8 @@ risk_project/
 
 ### Vistas Frontend
 
-1. **Dashboard** — Dos pestañas: *Uso del Modelo* (KPIs) y *Entrenamiento* (35 features, SVR, distribución)
-2. **Predicción** — Subir CSV o pegar texto → SVR estima sobrecosto % + LogisticRegression para alerta. Opcional: MC con RMSE variable, histograma, tornado, desglose en % y COP
+1. **Dashboard** — Dos pestañas: *Uso del Modelo* (KPIs, evolución, distribución alertas) y *Entrenamiento* (575 contratos, 38 features, distribución, categorías)
+2. **Predicción** — Subir CSV o pegar texto → RF estima sobrecosto % + clasificador para alerta. Opcional: MC con RMSE variable, histograma, tornado, desglose en % y COP
 3. **Historial** — Lista paginada con "Ver análisis completo" inline
 
 ## Setup
@@ -162,14 +214,11 @@ uv venv
 # 3. Instalar dependencias
 uv sync
 
-# 4. Entrenar modelo SVR (opcional, ya hay artefactos)
-uv run train
+# 4. Iniciar backend
+uv run uvicorn backend.main:app --reload --port 8000
 
-# 5. Iniciar backend
-uv run uvicorn backend.main:app --reload
-
-# 6. En otra terminal, iniciar frontend
-uv run streamlit run frontend/streamlit_app.py
+# 5. En otra terminal, iniciar frontend
+uv run streamlit run frontend/streamlit_app.py --server.port 8502
 ```
 
 ### Docker (producción)
@@ -181,8 +230,8 @@ docker compose up -d
 # Ver estado
 docker compose ps
 
-# Entrenar modelo (opcional, dentro del backend)
-docker compose exec backend uv run train
+# Reconstruir imagen
+docker compose build backend
 
 # Ver logs
 docker compose logs -f
@@ -197,15 +246,14 @@ docker compose logs -f
 ## Stack
 
 | Capa | Tecnología |
-|---|---|---|
+|---|---|
 | Backend | Python 3.12+, FastAPI, Uvicorn |
 | Frontend | Streamlit 1.59+, Plotly |
-| ML | scikit-learn (SVR, LogisticRegression, TF-IDF, Ridge referencia), SHAP |
+| ML | scikit-learn (RandomForest, SVR, TF-IDF, StandardScaler), SHAP (TreeExplainer) |
 | Trazabilidad | **MLflow** (experimentos + model registry + artifact store) |
 | Contenerización | **Docker Compose** (3 servicios: mlflow, backend, frontend) |
 | Almacenamiento | SQLite (predicciones + resultados MC), joblib/pickle (modelos) |
 | Extracción datos | Pandas, requests (API datos.gov.co) |
-| Notebooks | Jupytext, scikit-learn |
 
 ## MLflow Traceability
 
@@ -217,7 +265,7 @@ El modelo y sus experimentos se registran en **MLflow** para trazabilidad comple
 - **Fallback local:** si MLflow no está disponible, el backend carga artefactos desde `models/`
 
 Cada entrenamiento (`uv run train`) registra:
-- Parámetros: `C`, `gamma`, `kernel`, feature count
+- Parámetros: `n_estimators`, `max_depth`, `max_features`, feature count
 - Métricas: `r2_cv`, `auc_cv`, `rmse`, `r2_full`
 - Artefactos: `.pkl` del modelo, `permutation_importance.csv`, scaler, feature names
 - Model Registry: versión auto-incremental con run_id vinculado
@@ -228,5 +276,5 @@ El endpoint `GET /model/info` expone los metadatos del modelo activo (versión, 
 
 - **SECOP I** (`f789-7hwg`): Pool de 1,560 contratos de obra pública con sobrecosto > 0
 - **SECOP II** (`jbjy-vk9h`): 5 contratos complementarios
-- **Matriz de Riesgos** (`docs/matriz_clean.csv`): 6,525 riesgos de **351 contratos**
-- **Feature engineering**: 35 features (30 top TF-IDF + 5 de rango: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio)
+- **Matriz de Riesgos** (`docs/matriz.csv`): 11,029 riesgos de **577 contratos**
+- **Feature engineering**: 38 features (30 RF-selected + 5 de rango + 3 mitigación)

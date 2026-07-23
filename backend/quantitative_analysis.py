@@ -13,10 +13,7 @@ from .feature_engineering import aggregate_risks
 ROOT = Path(__file__).resolve().parent.parent
 
 VAR_FEATURE_NAMES = [
-    "prob_promedio",
-    "prob_std",
     "imp_promedio",
-    "interaccion_prob_x_impacto",
 ]
 
 
@@ -42,11 +39,17 @@ def _load_rmse_predictor():
 
 def _build_x(df_feat, feature_names, probs, imps, idx_var):
     x = df_feat[feature_names].values.copy()
-    pm = probs.mean()
-    ps = probs.std(ddof=0)
-    im = imps.mean()
-    inter = pm * im
-    x[0, idx_var] = [pm, ps, im, inter]
+    vals = []
+    for n in VAR_FEATURE_NAMES:
+        if n == "imp_promedio":
+            vals.append(imps.mean())
+        elif n == "prob_promedio":
+            vals.append(probs.mean())
+        elif n == "prob_std":
+            vals.append(probs.std(ddof=0))
+        elif n == "interaccion_prob_x_impacto":
+            vals.append(probs.mean() * imps.mean())
+    x[0, idx_var] = vals
     return x
 
 
@@ -67,51 +70,10 @@ def _cop(valor, vi):
 
 
 @lru_cache(maxsize=1)
-def _load_shap_background(n_samples: int = 100) -> pd.DataFrame:
-    """Load SHAP background data: 100 random contracts from training set."""
-    cache_path = ROOT / "models" / "shap_background.pkl"
-    if cache_path.exists():
-        return joblib.load(cache_path)
-
-    matriz = pd.read_csv(ROOT / "docs" / "matriz_clean.csv", encoding="utf-8-sig")
-    macro = pd.read_csv(ROOT / "docs" / "contratos_macro.csv")
-
-    rng = np.random.default_rng(42)
-    contratos = matriz["id_contrato"].unique()
-    sampled = list(rng.choice(contratos, size=min(n_samples, len(contratos)), replace=False))
-
-    macro_map = macro.set_index("id_contrato")[["anio_inicio", "anio_fin"]].to_dict("index")
-    feat_names: list[str] = joblib.load(ROOT / "models" / "feature_names.pkl")
-
-    rows: list[pd.DataFrame] = []
-    for cid in sampled:
-        sub = matriz[matriz["id_contrato"] == cid].copy()
-        feats = macro_map.get(cid, {"anio_inicio": 2022, "anio_fin": 2022})
-        feat = aggregate_risks(sub, anio_inicio=feats["anio_inicio"], anio_fin=feats["anio_fin"])
-        rows.append(feat)
-
-    bg = pd.concat(rows, ignore_index=True)
-    for c in feat_names:
-        if c not in bg.columns:
-            bg[c] = 0.0
-    bg = bg[feat_names]
-
-    joblib.dump(bg, cache_path)
-    return bg
-
-
-@lru_cache(maxsize=1)
 def _get_shap_explainer():
-    """Get or create cached SHAP KernelExplainer for the SVR model."""
-    regressor, _, scaler, feature_names = load_model()
-    background = _load_shap_background()
-    bg_raw = background[feature_names].values.astype(np.float64)
-
-    def predict_fn(X: np.ndarray) -> np.ndarray:
-        X = np.asarray(X, dtype=np.float64)
-        return regressor.predict(scaler.transform(X))
-
-    return shap.KernelExplainer(predict_fn, bg_raw)
+    """Get or create cached SHAP TreeExplainer for the RandomForest model."""
+    regressor, _, _, feature_names = load_model()
+    return shap.TreeExplainer(regressor), feature_names
 
 
 _PROP_PREFIX_TO_COL = {
@@ -223,12 +185,15 @@ def _desglose_por_riesgo_shap(
     probs = df_contrato["probabilidad"].values.astype(float)
     imps = df_contrato["impacto"].values.astype(float)
 
-    explainer = _get_shap_explainer()
+    explainer, _ = _get_shap_explainer()
 
     X_raw = df_feat[feature_names].values.astype(np.float64).reshape(1, -1)
-    shap_values = explainer.shap_values(X_raw, nsamples=1000)
+    X_scaled = scaler.transform(X_raw)
+    shap_values = explainer.shap_values(X_scaled)
 
-    if shap_values.ndim == 2:
+    if isinstance(shap_values, list):
+        shap_vals = shap_values[0]
+    elif shap_values.ndim == 2:
         shap_vals = shap_values[0]
     else:
         shap_vals = shap_values
@@ -278,7 +243,7 @@ def compute(
 
     X_base = _build_x(df_feat, feature_names, probs_orig, imps_orig, idx_var)
 
-    # RMSE dinámico: predecir error esperado del SVR (con fallback a heurística)
+    # RMSE dinámico: predecir error esperado del RandomForest (con fallback a heurística)
     rmse_predictor = _load_rmse_predictor()
     if rmse_predictor is not None:
         X_s = scaler.transform(X_base)
@@ -290,18 +255,25 @@ def compute(
 
     pred_base = float(regressor.predict(scaler.transform(X_base))[0])
 
-    muestras = np.empty(n_iteraciones)
+    probs_mat = np.clip(
+        probs_orig + rng.integers(-1, 2, size=(n_iteraciones, n_riesgos)),
+        1, 5,
+    )
+    imps_mat = np.clip(
+        imps_orig + rng.integers(-1, 2, size=(n_iteraciones, n_riesgos)),
+        1, 5,
+    )
+
+    X_base = df_feat[feature_names].values
+    X_batch = np.repeat(X_base, n_iteraciones, axis=0)
     for i in range(n_iteraciones):
-        delta_prob = rng.integers(-1, 2, size=n_riesgos)
-        delta_imp = rng.integers(-1, 2, size=n_riesgos)
-        probs = np.clip(probs_orig + delta_prob, 1, 5)
-        imps = np.clip(imps_orig + delta_imp, 1, 5)
-        X = _build_x(df_feat, feature_names, probs, imps, idx_var)
-        X_s = scaler.transform(X)
-        pred = regressor.predict(X_s)[0]
-        if incluir_ruido:
-            pred += rng.normal(0, rmse)
-        muestras[i] = pred
+        vals = [imps_mat[i].mean()]
+        X_batch[i, idx_var] = vals
+
+    X_s_batch = scaler.transform(X_batch)
+    muestras = regressor.predict(X_s_batch)
+    if incluir_ruido:
+        muestras += rng.normal(0, rmse, size=n_iteraciones)
 
     percentiles = {}
     percentiles_cop = {}

@@ -8,6 +8,7 @@ FEATURE_LABELS = {
     "imp_promedio": "Impacto promedio",
     "tfidf_cualquier": "Cualquier",
     "tfidf_ejecucion": "Ejecución",
+    "tfidf_ejecución": "Ejecución",
     "tfidf_contrato": "Contrato",
     "prop_tipo_operacional": "Riesgos operacionales",
     "prob_promedio": "Probabilidad promedio",
@@ -37,8 +38,37 @@ FEATURE_LABELS = {
     "anio": "Año del contrato",
     "ipc": "Inflación (IPC)",
     "trm": "Tasa de cambio (TRM)",
+    "pct_riesgos_con_mitigacion": "% Riesgos con mitigación",
+    "avg_longitud_mitigacion": "Longitud mitigación prom.",
+    "n_distinct_codes_mitigacion": "Tipos de mitigación",
+}
+
+_PROP_PREFIX_LABEL = {
+    "tipo": "Tipo",
+    "clas": "Clase",
+    "asig": "Asignación",
+    "fuen": "Fuente",
+    "etap": "Etapa",
+    "cate": "Categoría",
 }
 
 
 def label_feature(name: str) -> str:
-    return FEATURE_LABELS.get(name, name)
+    cached = FEATURE_LABELS.get(name)
+    if cached is not None:
+        return cached
+
+    if name.startswith("tfidf_"):
+        word = name[6:].replace("_", " ")
+        return word.title()
+
+    if name.startswith("prop_"):
+        rest = name[5:]
+        parts = rest.split("_", 1)
+        if len(parts) == 2:
+            prefix, value = parts
+            label = _PROP_PREFIX_LABEL.get(prefix, prefix.capitalize())
+            return f"{label}: {value.replace('_', ' ')}"
+        return rest.replace("_", " ")
+
+    return name

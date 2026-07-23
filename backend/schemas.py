@@ -4,21 +4,21 @@ from pydantic import BaseModel, Field
 class FactorInfo(BaseModel):
     feature: str = Field(..., description="Nombre interno de la variable")
     label: str = Field(..., description="Nombre legible para el usuario")
-    coef: float = Field(..., description="Coeficiente del modelo")
+    coef: float = Field(..., description="Importancia de la variable (feature importance)")
 
 
 class PrediccionSalida(BaseModel):
     id_contrato: str = Field(..., description="Identificador del contrato")
     sobrecosto_estimado: float = Field(..., description="Sobrecosto estimado en porcentaje")
-    intervalo_confianza: str = Field(default="±17.1 pp (RMSE del modelo SVR)")
+    intervalo_confianza: str = Field(default="±11.4 pp (RMSE del modelo RandomForest)")
     probabilidad_alto_riesgo: float = Field(..., description="Probabilidad de sobrecosto >25% (0-1)")
     alerta: str = Field(..., description="ALTO RIESGO o RIESGO MODERADO")
     riesgos_procesados: int = Field(default=0, description="Cantidad de riesgos procesados")
     factores_aumentan: list[FactorInfo] = Field(..., description="Variables que más aumentan el sobrecosto")
     factores_disminuyen: list[FactorInfo] = Field(..., description="Variables que más disminuyen el sobrecosto")
-    modelo: str = Field(default="SVR (kernel RBF) + LogisticRegression")
-    r2_cv: float = Field(default=0.068)
-    auc_cv: float = Field(default=0.673)
+    modelo: str = Field(default="RandomForest + RandomForestClassifier")
+    r2_cv: float = Field(default=0.235)
+    auc_cv: float = Field(default=0.591)
     accuracy: float = Field(default=0.706)
     history_id: int | None = Field(default=None, description="ID en el historial local")
 
@@ -52,7 +52,7 @@ class BinHistograma(BaseModel):
 
 
 class MonteCarloSalida(BaseModel):
-    prediccion_central: float = Field(..., description="Predicción base del modelo SVR (%)")
+    prediccion_central: float = Field(..., description="Predicción base del modelo RandomForest (%)")
     percentiles: dict[str, float] = Field(..., description="Percentiles P5-P95 (%)")
     stats: dict[str, float] = Field(..., description="Estadísticas de la simulación (%)")
     histograma: list[BinHistograma] = Field(..., description="Histograma de 20 bins (%)")

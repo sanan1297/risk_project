@@ -571,14 +571,14 @@ def _render_tab_entrenamiento():
 
     st.html(f"""
     <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr);">
-      {kpi_card("Contratos Entrenados", f"{tc:,}", f"{cm} raw · {pool} pool SECOP I", ("#4facfe", "#00f2fe"), True)}
+      {kpi_card("Contratos Entrenados", f"{tc:,}", f"{trm_f:,} riesgos en matriz", ("#4facfe", "#00f2fe"), True)}
       {kpi_card("Sobrecosto Promedio", f"{sp:.1f}%", f"mediana: {sm:.1f}%", ("#EF4444", "#F97316"), sp < 25)}
       {kpi_card("Alto Riesgo (>25%)", f"{par*100:.0f}%", f"de {tc} contratos", ("#F39C12", "#FDB813"), par < 0.5)}
     </div>
     <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr);">
       {kpi_card("Matriz de Riesgos", f"{trm_f:,}", f"{tc} contratos (+{secop2} SECOP II)", ("#7B5CE4", "#b06ff2"), True)}
       {kpi_card("Riesgos x Contrato", f"{dn.get('media', 0):.0f}", f"min: {dn.get('min', 0)} · máx: {dn.get('max', 0)}", ("#1ABC9C", "#2ECC71"), True)}
-      {kpi_card("Features del Modelo", "35", "top: tfidf_diseños +1.31", ("#E91E63", "#FF6F61"), True)}
+      {kpi_card("Features del Modelo", f"{stats['modelo']['features']}", f"R²: {stats['modelo']['r2_cv']} · RMSE: {stats['modelo']['rmse']}pp", ("#E91E63", "#FF6F61"), True)}
     </div>
     """)
 
@@ -767,7 +767,9 @@ def _render_dashboard():
 
 # ─── PREDECIR ──────────────────────────────────────────
 def _mostrar_resultados(resp, df_original):
-    if resp.status_code == 200:
+    if isinstance(resp, list):
+        results = resp
+    elif resp.status_code == 200:
         results = resp.json()
     elif resp.status_code == 422:
         detail = resp.json().get("detail", {})
@@ -1029,7 +1031,7 @@ def _render_predict():
         if vi_val > 0:
             st.caption(f"$ {vi_val:,.0f}".replace(",", "."))
     with mc_row[2]:
-        mc_iter = st.number_input("Iteraciones", value=1000, min_value=100, max_value=10000, step=500, key="mc_iter")
+        mc_iter = st.number_input("Iteraciones", value=200, min_value=100, max_value=3000, step=500, key="mc_iter")
     with mc_row[3]:
         incluir_mc = st.checkbox("Incluir Monte Carlo", value=True, key="incluir_mc")
     with mc_row[4]:
@@ -1041,6 +1043,12 @@ def _render_predict():
     with btn_col:
         procesar_clicked = st.button("Procesar", key="procesar", type="primary", use_container_width=True)
 
+    if ready and "pred_input_hash" in st.session_state:
+        cur_hash = hash((raw, texto_csv))
+        if st.session_state.pred_input_hash != cur_hash:
+            for k in ("pred_results", "pred_df", "pred_input_hash", "mc_data"):
+                st.session_state.pop(k, None)
+
     if procesar_clicked and ready:
         if not _validate_required_params():
             st.warning("Completá los parámetros obligatorios en la barra lateral antes de procesar.")
@@ -1048,29 +1056,35 @@ def _render_predict():
             with st.spinner(":material/sync: Procesando riesgos..."):
                 resp = _call_api(data_bytes=raw, text_data=texto_csv, filename=file_name)
             if resp is not None:
+                if resp.status_code == 200:
+                    st.session_state.pred_results = resp.json()
+                    st.session_state.pred_df = df_orig
+                    st.session_state.pred_input_hash = hash((raw, texto_csv))
                 _mostrar_resultados(resp, df_orig)
 
-            if incluir_mc:
-                mc_history_id = None
-                if resp is not None and resp.status_code == 200:
-                    preds = resp.json()
-                    if isinstance(preds, list) and len(preds) > 0:
-                        mc_history_id = preds[0].get("history_id")
-                with st.spinner(f":material/sync: Ejecutando {mc_iter} simulaciones Monte Carlo..."):
-                    mc_resp = _call_mc_api(
-                        data_bytes=raw, text_data=texto_csv, filename=file_name,
-                        n_iteraciones=mc_iter, incluir_ruido=mc_ruido,
-                        valor_inicial=vi_val if vi_val > 0 else None,
-                        history_id=mc_history_id,
-                    )
+            if incluir_mc and resp is not None and resp.status_code == 200:
+                preds = resp.json()
+                mc_history_id = preds[0].get("history_id") if isinstance(preds, list) and len(preds) > 0 else None
+                mc_placeholder = st.empty()
+                mc_placeholder.warning(f":material/sync: Ejecutando {mc_iter} simulaciones Monte Carlo (puede demorar hasta 2 minutos)...")
+                mc_resp = _call_mc_api(
+                    data_bytes=raw, text_data=texto_csv, filename=file_name,
+                    n_iteraciones=mc_iter, incluir_ruido=mc_ruido,
+                    valor_inicial=vi_val if vi_val > 0 else None,
+                    history_id=mc_history_id,
+                )
+                mc_placeholder.empty()
                 if mc_resp is not None and mc_resp.status_code == 200:
                     st.session_state.mc_data = mc_resp.json()
                     _mostrar_resultados_mc(st.session_state.mc_data)
                 elif mc_resp is not None:
                     st.error(f":material/error: Error en MC: {mc_resp.status_code}")
 
-    elif "mc_data" in st.session_state:
-        _mostrar_resultados_mc(st.session_state.mc_data)
+    else:
+        if ready and "pred_results" in st.session_state:
+            _mostrar_resultados(st.session_state.pred_results, st.session_state.pred_df)
+        if ready and "mc_data" in st.session_state:
+            _mostrar_resultados_mc(st.session_state.mc_data)
                     
     st.markdown('</div></div>', unsafe_allow_html=True)
     st.html('<div style="height: 20px;"></div>')
@@ -1265,7 +1279,7 @@ def _call_mc_api(data_bytes, text_data, filename, n_iteraciones=1000, incluir_ru
     if history_id is not None:
         form["history_id"] = str(history_id)
     try:
-        return requests.post(f"{API_URL}/predict/montecarlo", files=files, data=form, timeout=60)
+        return requests.post(f"{API_URL}/predict/montecarlo", files=files, data=form, timeout=120)
     except requests.ConnectionError:
         st.error(":material/cloud_off: Backend no disponible.")
         return None

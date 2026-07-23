@@ -29,8 +29,11 @@
 |---|---|
 | `unificar_secop.py` | Descarga desde API SECOP I + II, cachea local, unifica en tabla común |
 | `depurar.py` | Lee los cache, normaliza columnas, aplica filtros, exporta CSV depurado |
-| `separar_fuentes.py`             | Divide `proyectos_depurados.csv` en SECOP I y SECOP II, elimina duplicados por URL en SECOP I |
-| `excel_lite.py`                  | Versión reducida con columnas esenciales; SECOP I lite solo con `sobrecosto_pct > 0` |
+| `separar_fuentes.py` | Divide `proyectos_depurados.csv` en SECOP I y SECOP II, elimina duplicados por URL en SECOP I |
+| `excel_lite.py` | Versión reducida con columnas esenciales; SECOP I lite solo con `sobrecosto_pct > 0` |
+| `consolidar_38_features.py` | Consolida matriz_clean → 575 registros × 38 features |
+| `train_production.py` | Entrenamiento reproducible del modelo RandomForest final |
+| `generate_model_artifacts.py` | Genera artefactos del modelo (feature_importances_rf.csv, etc.) |
 
 ### 2.2 Flujo de datos
 
@@ -98,7 +101,7 @@ sobrecosto_pct = ((valor_final - valor_inicial) / valor_inicial) × 100
 | **SECOP I sin duplicados (`proyectos_secop1.csv`)** | **4,723** | — | **4,723** |
 | Con sobrecosto > 0 (SECOP I lite) | **1,560** | — | **1,560** |
 
-> **Nota:** El modelo ML se entrenó con **350 contratos** — aquellos que tienen matriz de riesgo extraída en `docs/matriz_clean.csv`. Los 1,560 son el pool total de candidatos SECOP I con sobrecosto > 0; el resto no alcanzó a tener su matriz extraída (proceso manual: PDF → OCR → LLM). Los 5 contratos SECOP II mapeados (C-110 a C-114) están incluidos dentro de esos 350.
+> **Nota:** El modelo ML se entrenó con **575 contratos** — aquellos que tienen matriz de riesgo extraída y consolidada en `docs/consolidado_38_features.csv`. Los 1,560 son el pool total de candidatos SECOP I con sobrecosto > 0; el resto no alcanzó a tener su matriz extraída (proceso manual: PDF → OCR → LLM).
 
 ### 4.2 Estadísticas de sobrecosto
 
@@ -174,6 +177,8 @@ Los 4 primeros tienen sobrecosto real positivo. Rama Judicial tiene sobrecosto ~
 
 El dataset original tiene 131 filas malformadas (padding/truncado a 20 columnas por mal quoting CSV) que se reparan automáticamente durante la normalización. El proceso NO modifica `matriz.csv`, solo lee de él y escribe `matriz_clean.csv`.
 
+`matriz_clean.csv` mantiene 7,914 filas y 429 contratos (subconjunto normalizado de la versión original de `matriz.csv`). La versión completa de `matriz.csv` contiene 11,029 filas y 577 contratos (expansión posterior con nuevos contratos extraídos).
+
 ### 5.2 Pipeline de Normalización
 
 `estudio_data/normalizar.py` aplica las siguientes transformaciones sobre `matriz.csv` para producir `matriz_clean.csv`:
@@ -222,19 +227,38 @@ El dataset original tiene 131 filas malformadas (padding/truncado a 20 columnas 
 
 ### 5.4 Resumen del dataset
 
-| Métrica | Valor |
+| Dataset | Filas | Contratos Únicos | Riesgos/Contrato | Promedio Sobrecosto |
+|---|---|---|---|---|
+| `matriz.csv` (v1 original) | 6,525 | 351 (C-001 a C-351) | media 18.6, rango 3–58 | +27.53% |
+| `matriz.csv` (v2 expandido) | **11,029** | **577** | — | — |
+| `matriz_clean.csv` (normalizado) | 7,914 | 429 (C-001 a C-450 + C-21621) | media 18.5, rango 2–58 | +24.8% |
+
+**Normalizaciones aplicadas:** 72,123 (v1) / 87,260 (matriz_clean)  
+**Filas malformadas reparadas:** 131 (v1) / 182 (matriz_clean)
+
+### 5.5 Consolidado de 38 features (`consolidado_38_features.csv`)
+
+A partir de `matriz_clean.csv` se consolida un registro por contrato con 38 features:
+- **30 features**: TF-IDF sobre descripciones, proporciones categóricas (tipo, clase, asignación, etapa, fuente, categoría, plan_mitigación), estadísticas agregadas (probabilidad, impacto, valoración), interacciones — seleccionadas por RandomForestRegressor (500 trees, max_depth=12)
+- **5 features macro**: `anio_inicio`, `anio_fin`, `duracion`, `ipc_acumulado`, `trm_promedio`
+- **3 features de mitigación**: derivadas del `plan_mitigacion` textual
+
+| Item | Valor |
 |---|---|
-| Filas totales | 6,525 |
-| Contratos únicos | 351 (C-001 a C-351) |
-| Riesgos por contrato | media 18.6, rango 3–58 |
-| Con URL `contratos.gov.co` (SECOP I) | 346 |
-| Con URL `community.secop.gov.co` (SECOP II) | 5 |
-| Promedio sobrecosto | +27.53% (todos ≥ 0%) |
-| Máximo sobrecosto | +808.76% (C-143, posible outlier) |
-| Categorías residuales | 0 (solo bajo/medio/alto/extremo/no especificado) |
-| Normalizaciones aplicadas | 72,123 en 9 campos categóricos |
-| Tildes en el dataset | 0 |
-| Valores vacíos categóricos | 0 (todos → "no especificado") |
+| Contratos en consolidado | 575 |
+| NaN en features | 0 |
+| Features totales | 38 (30 RF-seleccionadas + 5 macro + 3 mitigación) |
+| Script | `scripts/consolidar_38_features.py` |
+
+### 5.6 Macro data para contratos sin rango de fechas
+
+86 contratos (C-366 a C-450 + C-21621) no tenían macro data (anio_inicio/anio_fin). Se completaron mediante:
+1. Match por `valor_final` desde `secop1_cache.csv`
+2. Extracción de `fecha_ini_ejec_contrato` y `fecha_fin_ejec_contrato`
+3. Cálculo de IPC acumulado y TRM promedio desde tabla IPC_TRM
+4. Script: `scripts/fill_macro_86.py`
+
+**Contratos excluidos del entrenamiento (testing):** C-352 a C-365. No existen en la fuente original de Tesis (gap C-351 → C-366). Si aparecen en el futuro, se agregan vía `scripts/agregar_nuevos.py`.
 
 ---
 
@@ -242,8 +266,10 @@ El dataset original tiene 131 filas malformadas (padding/truncado a 20 columnas 
 
 El dataset `matriz.csv` se construyó fuera del pipeline del repositorio. Para cada URL en `proyectos_secop1_lite.csv` se navegó al portal de contratos.gov.co, se descargó el PDF de la matriz de riesgos, y se extrajeron los campos estructurados (descripción, probabilidad, impacto, valoración, categoría, asignación, plan de mitigación) mediante LLM (DeepSeek Flash V4 como extractor principal, Gemini Standard Flash como validador, Google Lens API para OCR en PDFs escaneados).
 
-**Archivo resultante:** `Tesis/Matrices/matriz.csv` — 6,525 filas, 20 columnas (copia en `docs/matriz.csv`).  
-**Versión normalizada:** `docs/matriz_clean.csv` (131 filas con campos corridos por falta de quoting CSV fueron reparadas; 72,123 normalizaciones aplicadas por `estudio_data/normalizar.py`). El notebook de análisis (`estudio_data/matriz_inicial.ipynb`) usa esta versión.
+**Archivo resultante:** `Tesis/Matrices/matriz.csv` — 11,029 filas, 20 columnas (copia en `docs/matriz.csv`).  
+**Versión normalizada:** `docs/matriz_clean.csv` (7,914 filas, 429 contratos — subconjunto normalizado). 182 filas con campos corridos por falta de quoting CSV fueron reparadas; 87,260 normalizaciones aplicadas por `estudio_data/normalizar.py`. El notebook de análisis (`estudio_data/matriz_inicial.ipynb`) usa esta versión.
+
+> **Nota sobre v1 vs v2:** La versión original de `docs/matriz.csv` tenía 6,525 filas y 351 contratos (C-001 a C-351). Se reemplazó con la versión completa de `Tesis/Matrices/matriz.csv` que tiene 11,029 filas y 577 contratos. `matriz_clean.csv` mantiene 7,914 filas y 429 contratos (subconjunto normalizado de una versión intermedia). Hay un gap de C-352 a C-365 que no existen en la fuente original — esos son contratos de prueba que se agregan manualmente vía `scripts/agregar_nuevos.py` si es necesario.
 
 ---
 
@@ -261,11 +287,24 @@ risk_project/
 ├── excel_lite.py                  # Versión reducida; SECOP I lite solo con sobrecosto > 0
 ├── estudio_data/
 │   ├── normalizar.py              # Pipeline de normalización (lee matriz.csv, escribe matriz_clean.csv)
-│   └── matriz_inicial.ipynb       # EDA con 29 celdas (distribuciones, correlaciones, conclusiones)
+│   └── matriz_inicial.ipynb       # EDA con 29 celdas
+├── estudio_modelos/
+│   └── modelo_final.ipynb         # Benchmark 10 modelos + test eval + clasificadores + RMSE predictor
+├── scripts/
+│   ├── agregar_nuevos.py          # Agrega contratos nuevos (C-360 a C-365) a matriz_clean + macro
+│   ├── fill_macro_86.py           # Completa macro data para 86 contratos desde secop1_cache
+│   ├── consolidar_35_features.py  # Consolida matriz_clean → 428 registros × 35 features
+│   ├── consolidar_38_features.py  # Consolida matriz_clean → 575 registros × 38 features
+│   ├── train_343.py               # Entrenamiento con 343 contratos originales
+│   ├── train_production.py        # Entrenamiento reproducible del modelo RandomForest final
+│   └── generate_model_artifacts.py# Genera artefactos del modelo (feature_importances_rf.csv, etc.)
 ├── docs/
 │   ├── proceso.md                 # Este documento
-│   ├── matriz.csv                 # Dataset original enriquecido (6,525 filas, 20 cols) — 351 contratos
-│   └── matriz_clean.csv           # Versión normalizada (131 filas reparadas, 72,123 normalizaciones)
+│   ├── matriz.csv                 # Dataset original desde Tesis (11,029 filas) — 577 contratos
+│   ├── matriz_clean.csv           # Versión normalizada (182 filas reparadas, 87,260 normalizaciones) — 429 contratos
+│   ├── contratos_macro.csv        # Macro data (anio_inicio, anio_fin, ipc, trm) — 437 contratos
+│   ├── consolidado_35_features.csv# 428 contratos × 35 features (30 riesgo + 5 macro) — versión anterior
+│   └── consolidado_38_features.csv# 575 contratos × 38 features (30 RF + 5 macro + 3 mitigación) — listo para ML
 └── contratos/
     ├── secop1_cache.csv           # Cache RAW SECOP I (35,233 registros) — excluido de git
     ├── secop2_cache.csv           # Cache RAW SECOP II (16,298 registros) — excluido de git
@@ -276,7 +315,7 @@ risk_project/
 
 Tesis/
 └── Matrices/
-    └── matriz.csv                  # Dataset original (6,525 filas, 20 cols) — fuente primaria de docs/matriz.csv
+    └── matriz.csv                  # Dataset original (11,029 filas, 20 cols) — fuente primaria de docs/matriz.csv
 ```
 
 ---
@@ -303,7 +342,7 @@ Exposición REST con FastAPI. El frontend apunta a `http://localhost:8003` (work
 | `PUT` | `/history/{id}` | `sobrecosto_real`, `notas` (form) | `{"status": "ok", "id": N}` | Guardar validación (sobrecosto real observado) |
 | `DELETE` | `/history/{id}` | — | `{"status": "ok", "id": N}` | Eliminar una predicción del historial |
 | `DELETE` | `/history` | — | `{"status": "ok"}` | Limpiar todo el historial |
-| `GET` | `/model/info` | — | `model_version`, `run_id`, `experiment_id`, `mlflow_available`, métricas SVR | Metadatos del modelo cargado (desde MLflow o local) |
+| `GET` | `/model/info` | — | `model_version`, `run_id`, `experiment_id`, `mlflow_available`, métricas RandomForest | Metadatos del modelo cargado (desde MLflow o local) |
 | `GET` | `/stats/usage` | — | Agregados de `history.db` (total predicciones, % alto riesgo, serie temporal, top factores, MC stats) | Dashboard de uso del modelo |
 | `GET` | `/stats/training` | — | Agregados de datos de entrenamiento + coeficientes del modelo | Dashboard de entrenamiento |
 
@@ -315,13 +354,13 @@ La app es single-page con navegación vía `?view=` en query params:
 |-------|------|---------|-----------|
 | Dashboard | `?view=dashboard` | `_render_dashboard()` | 2 tabs: "Uso del Modelo" (KPI cards, evolución, distribución alertas) y "Entrenamiento" (KPI cards, top features, tabla de riesgos por clase) |
 | Predicción | `?view=predict` | `_render_predict()` | Selector CSV/texto, parámetros en sidebar, análisis cualitativo (alerta + factores) + cuantitativo (Monte Carlo con 1000 iteraciones, tornado por tipo de riesgo con swing real del modelo, histograma, desglose individual vía SHAP, valores en % y COP) |
-| Historial | `?view=history` | `_render_history()` | Lista paginada (15/page) con contrato, alerta, Ridge, Prob., Real, botón eliminar, formulario de validación inline, y botón "Ver análisis completo" (expande inline el MC + cualitativo) |
+| Historial | `?view=history` | `_render_history()` | Lista paginada (15/page) con contrato, alerta, RF, Prob., Real, botón eliminar, formulario de validación inline, y botón "Ver análisis completo" (expande inline el MC + cualitativo) |
 
 ### 8.4 Flujo de Datos — Predicción
 
-![Flujo de datos — Predicción: usuario sube CSV, Streamlit llama a la API, feature engineering + SVR + RMSE dinámico (safety factor 0.85) + MC + SHAP, resultados en SQLite](diagrams/8_4_flujo_de_datos_predicci_n.png)
+![Flujo de datos — Predicción: usuario sube CSV, Streamlit llama a la API, feature engineering + RF + RMSE dinámico (safety factor 0.85) + MC + SHAP, resultados en SQLite](diagrams/8_4_flujo_de_datos_predicci_n.png)
 
-*Flujo de datos — Predicción: usuario sube CSV, Streamlit llama a la API, feature engineering + SVR + RMSE dinámico (safety factor 0.85) + MC + SHAP, resultados en SQLite*
+*Flujo de datos — Predicción: usuario sube CSV, Streamlit llama a la API, feature engineering + RF + RMSE dinámico (safety factor 0.85) + MC + SHAP, resultados en SQLite*
 
 ### 8.5 Flujo de Datos — Dashboard
 
@@ -337,40 +376,42 @@ La app es single-page con navegación vía `?view=` en query params:
 
 ### 8.7 Pipeline Completo
 
-![Pipeline completo: desde SECOP API hasta el frontend, pasando por extracción, feature engineering, SVR + RMSE Predictor, MLflow y FastAPI](diagrams/8_7_pipeline_completo.png)
+![Pipeline completo: desde SECOP API hasta el frontend, pasando por extracción, feature engineering, RF + RMSE Predictor, MLflow y FastAPI](diagrams/8_7_pipeline_completo.png)
 
-*Pipeline completo: desde SECOP API hasta el frontend, pasando por extracción, feature engineering, SVR + RMSE Predictor, MLflow y FastAPI*
+*Pipeline completo: desde SECOP API hasta el frontend, pasando por extracción, feature engineering, RF + RMSE Predictor, MLflow y FastAPI*
 
 ### 8.8 RMSE Dinámico — Predicción de Error ML
 
 El RMSE del Monte Carlo se predice con un modelo ML independiente en vez de la heurística por bucket:
 
 ```
-Features (35) ──→ SVR Sobrecosto ──→ predicción central (sobrecosto %)
-               ──→ RMSE Predictor ──→ error esperado del SVR (RMSE dinámico)
-                                         ↓
-                               Monte Carlo (ruido ~ N(0, RMSE))
+Features (38) ──→ RandomForest Sobrecosto ──→ predicción central (sobrecosto %)
+               ──→ RMSE Predictor ──────────→ error esperado del RF (RMSE dinámico)
+                                                   ↓
+                                         Monte Carlo (ruido ~ N(0, RMSE))
 ```
 
-**Entrenamiento:** Se calculó `|sobrecosto_real - svr_pred|` para los 351 contratos históricos y se entrenó un SVR Linear con las mismas 35 features. El modelo aprende qué perfiles de contrato tienen mayor/menor error de predicción.
+**Entrenamiento:** Se calculó `|sobrecosto_real - rf_pred|` para los 575 contratos históricos y se entrenó un **SVR RBF** (ganador de benchmark vs Ridge/Lasso/RandomForest/GradientBoosting/SVR Linear) con las mismas 38 features. El modelo aprende qué perfiles de contrato tienen mayor/menor error de predicción.
 
-**Resultados (n=351):**
-| Método | MAE | Mejora |
+**Resultados en test (n=86):**
+| Método | MAE |
+|---|---|
+| Heurística (bucket) | 8.37 pp |
+| **RMSE Predictor (SVR RBF)** | **7.30 pp** |
+
+**Benchmark de meta-modelos (nested CV 5-fold):**
+| Modelo | MAE | R² |
 |---|---|---|
-| Heurística (bucket) | 12.78 pp | — |
-| RMSE Predictor | **8.66 pp** | **+32.3%** |
+| Ridge | 8.22 ± 1.63 | −0.927 ± 1.504 |
+| Lasso | 8.23 ± 1.60 | −0.921 ± 1.490 |
+| SVR Linear | 7.81 ± 1.25 | −0.282 ± 0.260 |
+| **SVR RBF** | **7.30 ± 1.00** | **−0.042 ± 0.021** |
+| RandomForest | 7.82 ± 1.03 | −0.385 ± 0.396 |
+| GradientBoosting | 8.04 ± 0.59 | −0.533 ± 0.582 |
 
-**Mejora por bucket:**
-| Bucket | Heur | Pred | Mejora |
-|---|---|---|---|
-| 1-10 | 7.24 | 5.21 | +28% |
-| 11-20 | 16.68 | 13.21 | +21% |
-| 21-30 | 12.44 | 6.84 | +45% |
-| >30 | 16.10 | 8.12 | +50% |
+SVR RBF fue el mejor aunque su R² es negativo (−0.04), lo cual es esperable: predecir el error de otro modelo es inherentemente ruidoso. El MAE (7.30 pp) sí mejora la heurística (8.37 pp, +12.8%).
 
-Los buckets 21-30 y >30 tenían la mayor sobreestimación (asignaban 20-24 pp a contratos con error real ~10 pp). El RMSE Predictor corrige esto usando TF-IDF, categorías y macro para estimar la incertidumbre real de cada contrato.
-
-**Archivo:** `models/rmse_predictor.pkl` (SVR Linear, mismo escalador que el SVR de sobrecosto). Fallback a heurística si el archivo no existe.
+**Archivo:** `models/rmse_predictor.pkl` (SVR RBF, mismo escalador que el RandomForest de sobrecosto). Fallback a heurística si el archivo no existe.
 
 ### 8.8.1 Integración en el Backend
 
@@ -381,37 +422,31 @@ En `backend/quantitative_analysis.py:compute()`, en cada llamada al análisis cu
 rmse_predictor = _load_rmse_predictor()
 
 if rmse_predictor is not None:
-    X_s = scaler.transform(X_base)              # escalar 35 features
-    rmse_pred = float(rmse_predictor.predict(X_s)[0])  # predecir error del SVR
+    X_s = scaler.transform(X_base)              # escalar 38 features
+    rmse_pred = float(rmse_predictor.predict(X_s)[0])  # predecir error del RF
     rmse_heur = _rmse_por_contrato(n_riesgos)          # referencia heurística
     rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)       # safety factor
 else:
     rmse = _rmse_por_contrato(n_riesgos)               # fallback
 ```
 
-**¿Qué hace?** Para cada contrato, transforma sus 35 features (TF-IDF + categorías + macro) con el `StandardScaler`, y el SVR Linear predice cuánto espera que se equivoque el SVR de sobrecosto. Ese valor, combinado con el safety factor, se usa como σ del ruido Gaussiano en las 1000 iteraciones MC.
+**¿Qué hace?** Para cada contrato, transforma sus 38 features (TF-IDF + categorías + macro + mitigación) con el `StandardScaler`, y el SVR RBF predice cuánto espera que se equivoque el RandomForest de sobrecosto. Ese valor, combinado con el safety factor, se usa como σ del ruido Gaussiano en las 1000 iteraciones MC.
 
-**¿Por qué?** La heurística por bucket ignoraba diferencias en descripciones y categorías de riesgo, sobreestimando sistemáticamente en buckets 21-30 y >30 (asignaba 20-24 pp a errores reales de ~10 pp). El predictor mejora el MAE en +32.3%.
+**¿Por qué?** La heurística por bucket ignoraba diferencias en descripciones y categorías de riesgo. El predictor ML ajusta la incertidumbre según el perfil real del contrato.
 
-**Características:** SVR Linear (C=1.0), 35 features, target = `|real - svr_pred|`, entrenado con 351 contratos, cacheado con `@lru_cache`, archivo `models/rmse_predictor.pkl`.
+**Características:** SVR RBF (C=1.0, gamma=scale), 38 features, target = `|real - rf_pred|`, entrenado con 575 contratos, cacheado con `@lru_cache`, archivo `models/rmse_predictor.pkl`.
 
 ### 8.8.2 Safety Factor — Ajuste por Cobertura
 
-En validación con 12 contratos, el RMSE Predictor crudo dejaba 5/10 reales fuera del intervalo P10-P90. Se implementó un safety factor:
+En validación, el RMSE Predictor crudo dejaba varios reales fuera del intervalo P10-P90. Se implementó un safety factor:
 
 ```python
 rmse = max(rmse_pred, rmse_heur * 0.85, 2.0)
 ```
 
-Donde `rmse_heur` es el valor de la heurística por n_riesgos. Esto asegura que el RMSE nunca sea menor al 85% del valor heurístico, manteniendo intervalos 15% más angostos pero con cobertura aceptable.
+Donde `rmse_heur` es el valor de la heurística por n_riesgos. Esto asegura que el RMSE nunca sea menor al 85% del valor heurístico.
 
-**Validación (12 contratos, factor 0.85):**
-- **Cobertura:** 7/10 contratos con real dentro de P10-P90
-- **RMSE mínimo:** 13.6 pp (vs 16 pp con heurística pura)
-- **P90-P10 típico:** ~35 pp (vs ~41 pp con heurística)
-- **Contratos fuera:** C-010, C-017, C-043 (error SVR >19 pp)
-
-El factor 0.85 es un balance entre precisión (intervalos más angostos) y cobertura (70% de aciertos). Puede ajustarse a 1.0 si se prioriza cobertura sobre precisión.
+El factor 0.85 es un balance entre precisión (intervalos más angostos) y cobertura. Puede ajustarse a 1.0 si se prioriza cobertura sobre precisión.
 
 ### 8.9 Arquitectura del Sistema
 
@@ -436,7 +471,7 @@ El factor 0.85 es un balance entre precisión (intervalos más angostos) y cober
 | `duracion` | INTEGER | Duración en años (anio_fin - anio_inicio + 1) |
 | `ipc_acumulado` | REAL | IPC acumulado del rango |
 | `trm_promedio` | REAL | TRM promedio del rango |
-| `prediccion_svr` | REAL | Sobrecosto estimado por SVR |
+| `prediccion_rf` | REAL | Sobrecosto estimado por RandomForest |
 | `probabilidad_alto_riesgo` | REAL | Probabilidad de sobrecosto > 25% (0-1) |
 | `alerta` | TEXT | `ALTO RIESGO` o `RIESGO MODERADO` |
 | `factores_aumentan` | TEXT (JSON) | Top 5 factores que aumentan el sobrecosto |
@@ -453,9 +488,9 @@ El factor 0.85 es un balance entre precisión (intervalos más angostos) y cober
 Se integró **MLflow 3.14** como sistema de trazabilidad de experimentos y modelo:
 
 - **Servidor independiente** (`ghcr.io/mlflow/mlflow:v3.14.0`) con backend SQLite y artifact store local
-- **Registro de experimentos:** cada entrenamiento (`scripts/train_final_model.py`) registra params, metrics y artefactos en el experimento `risk-predictor`
-- **Model Registry:** el modelo se registra como `risk-predictor-svr` con versionado auto-incremental
-- **Backend (`backend/mlflow_tracker.py`):** carga modelo desde MLflow en startup; fallback a `models/` si no hay conexión
+- **Registro de experimentos:** cada entrenamiento (`scripts/train_production.py`) registra params, metrics y artefactos en el experimento `risk-predictor`
+- **Model Registry:** el modelo se registra como `risk-predictor-rf` con versionado auto-incremental
+- **Backend (`backend/mlflow_tracker.py`):** carga `modelo_campeon.pkl` desde MLflow en startup; fallback a `models/` si no hay conexión
 - **Endpoint `GET /model/info`:** expone `model_version`, `run_id`, `experiment_id` y estado de conexión MLflow
 - **Frontend:** sidebar muestra versión activa del modelo y run_id
 
@@ -506,7 +541,7 @@ docker compose exec backend uv run train
 | `backend` | `HISTORY_DB_PATH` | `/app/data/history.db` | Ruta de la base de datos |
 | `backend` | `MLFLOW_TRACKING_URI` | `http://mlflow:5000` | URI del servidor MLflow |
 | `backend` | `MLFLOW_EXPERIMENT_NAME` | `risk-predictor` | Experimento MLflow |
-| `backend` | `MLFLOW_MODEL_NAME` | `risk-predictor-svr` | Nombre del modelo registrado |
+| `backend` | `MLFLOW_MODEL_NAME` | `risk-predictor-rf` | Nombre del modelo registrado |
 | `frontend` | `API_URL` | `http://backend:8003` | URL del backend API |
 | `mlflow` | `MLFLOW_SERVER_ALLOWED_HOSTS` | `*` | Hosts permitidos (seguridad DNS rebinding) |
 
@@ -529,8 +564,8 @@ docker compose exec backend uv run train
 
 ### 9.2 Dashboard — Entrenamiento
 
-- **KPI Cards:** Contratos de entrenamiento (351, con badge del pool SECOP I de 1,560), Sobrecosto promedio/mediana, % Alto Riesgo (>25%), Riesgos en matriz (6,525), SECOP II incluidos (5), R² del modelo, RMSE
-- **Tabla:** Top 10 features por permutation importance (positivos y negativos con label legible, del SVR + Ridge de referencia)
+- **KPI Cards:** Contratos de entrenamiento (575, con badge del pool SECOP I de 1,560), Sobrecosto promedio/mediana, % Alto Riesgo (>25%), Riesgos en matriz (11,029), SECOP II incluidos (5), R² del modelo, RMSE
+- **Tabla:** Top 10 features por permutation importance (positivos y negativos con label legible, del RandomForest + modelo de referencia)
 - **Distribución:** Barras por rango de sobrecosto (0-10%, 10-25%, 25-50%, 50-100%, 100%+)
 - **Gráficos:** Distribución de riesgos por categoría (barras), por tipo (barras horizontales), top contratos por n_riesgos
 - **Serie IPC/TRM:** Línea temporal de inflación y TRM por año
@@ -551,7 +586,7 @@ docker compose exec backend uv run train
 ### 9.4 Historial de Predicciones
 
 - **Lista paginada:** 15 registros por página
-- **Cada tarjeta muestra:** ID del contrato (con badge de alerta), fecha, n_riesgos, rango fechas, métricas (SVR, Prob., Real), top factores, notas, badge de MC si aplica
+- **Cada tarjeta muestra:** ID del contrato (con badge de alerta), fecha, n_riesgos, rango fechas, métricas (RF, Prob., Real), top factores, notas, badge de MC si aplica
 - **Navegación:** ◀ Anterior / Pág. X de Y · Mostrando registros 1–15 de N / Siguiente ▶
 - **Acciones:** Eliminar individual, Limpiar todo, Guardar validación
 - **"Ver análisis completo":** Botón centrado que expande inline la vista cualitativa + cuantitativa completa (histograma MC, tornado por tipo, desglose individual). Usa `GET /history/{id}` y `GET /history/{id}/resultados`. Keys de Streamlit con sufijo `{uid}` (hid) para evitar duplicados.
@@ -577,33 +612,36 @@ risk_project/
 ├── backend/
 │   ├── main.py                   # FastAPI REST API (11 endpoints)
 │   ├── schemas.py                # Pydantic models
-│   ├── predictor.py              # Carga SVR + LogisticRegression (35 features, permutation importance)
-│   ├── mlflow_tracker.py         # Carga de modelos desde MLflow Model Registry (fallback local)
-│   ├── feature_engineering.py    # Agregación de riesgos → 35 features (rango fechas: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio)
-│   ├── quantitative_analysis.py  # Monte Carlo (1000 iter, RMSE dinámico vía ML), tornado, desglose SHAP
-│   ├── history.py                # CRUD SQLite + stats + almacenamiento resultado_json del MC
-│   ├── training_stats.py         # Estadísticas del dataset de entrenamiento (351 contratos)
+│   ├── predictor.py              # Carga RandomForest (38 features, permutation importance, MODEL_META → RF)
+│   ├── mlflow_tracker.py         # Carga modelo_campeon.pkl desde MLflow o local
+│   ├── feature_engineering.py    # Agregación de riesgos → 38 features (rango fechas + mitigación)
+│   ├── quantitative_analysis.py  # Monte Carlo (1000 iter, RMSE dinámico vía ML, batch-vectorized), tornado, SHAP TreeExplainer
+│   ├── history.py                # CRUD SQLite + stats + resultado_json del MC
+│   ├── training_stats.py         # Estadísticas del dataset de entrenamiento (575 contratos, 11,029 riesgos)
 │   └── feature_labels.py         # Labels legibles para features técnicas
 ├── frontend/
 │   └── streamlit_app.py          # App Streamlit (~1150 líneas)
 ├── models/
-│   ├── svr_regressor.pkl         # SVR campeón (R² CV 0.068, C=10, gamma=scale)
-│   ├── classifier.pkl            # LogisticRegression (AUC 0.673)
-│   ├── ridge_reference.pkl       # Ridge de referencia (coeficientes lineales)
-│   ├── permutation_importance.csv# Importancia global del SVR (10 reps)
+│   ├── modelo_campeon.pkl        # RandomForest campeón (390 trees, R² full=0.622)
+│   ├── classifier.pkl            # RandomForest clasificador (AUC nested CV 0.654+)
+│   ├── rmse_predictor.pkl        # SVR RBF para RMSE dinámico (MAE 7.30 pp)
+│   ├── permutation_importance.csv# Importancia global del RandomForest (10 reps)
 │   ├── scaler.pkl                # StandardScaler ajustado
-│   ├── feature_names.pkl         # Lista de 35 feature names
+│   ├── feature_names.pkl         # Lista de 38 feature names
 │   ├── tfidf_vectorizer.pkl      # Vectorizador TF-IDF
 │   ├── ipc_trm.pkl               # Diccionario IPC/TRM por año
-│   ├── shap_background.pkl       # 100 contratos de background para SHAP KernelExplainer
-│   └── rmse_predictor.pkl        # SVR Linear para RMSE dinámico (+32% vs heurística)
+│   └── feature_importances_rf.csv# Importancia de features del RandomForest
 ├── scripts/
-│   └── train_final_model.py      # Entrenamiento reproducible del modelo final
+│   ├── train_final_model.py      # Entrenamiento reproducible del modelo final (Ridge anterior)
+│   ├── train_production.py       # Entrenamiento reproducible del modelo RandomForest final
+│   ├── consolidar_38_features.py # Consolida matriz_clean → 575 registros × 38 features
+│   └── generate_model_artifacts.py # Genera artefactos del modelo (feature_importances_rf.csv, etc.)
 ├── docs/
 │   ├── proceso.md                # Este documento
 │   ├── modelo.md                 # Resultados del modelo (R², RMSE, features)
-│   ├── matriz.csv                # Dataset original de matrices de riesgo
-│   └── matriz_clean.csv          # Versión normalizada (351 contratos, 6,525 riesgos)
+│   ├── matriz.csv                # Dataset original de matrices de riesgo (11,029 filas)
+│   ├── matriz_clean.csv          # Versión normalizada (429 contratos, 7,914 riesgos)
+│   └── consolidado_38_features.csv# 575 contratos × 38 features
 └── tests/
     ├── plan_de_pruebas.md        # Plan y resultados de validación (Grupos A, B, C, D)
     └── data/                     # CSVs de prueba por contrato
@@ -613,7 +651,7 @@ risk_project/
 
 ### 11.1 Diseño de Pruebas
 
-Se diseñaron cuatro grupos de prueba para evaluar el modelo SVR de 35 features:
+Se diseñaron cuatro grupos de prueba para evaluar el modelo RandomForest de 38 features:
 
 | Grupo | Propósito | Contratos | Origen |
 |---|---|---|---|
@@ -644,10 +682,10 @@ Ubicación: `tests/data/` — contiene los CSVs de cada contrato y el metadata `
 
 ### 11.3 Resultados Grupo A — Prueba de Sanidad
 
-Modelo SVR con 35 features (30 TF-IDF + 5 rango: anio_inicio, anio_fin, duracion, ipc_acumulado, trm_promedio). R² CV: 0.068, R² full (in-sample): 0.417, AUC: 0.673.
+Modelo RandomForest con 38 features (30 TF-IDF + 5 rango + 3 mitigación). R² full (in-sample): 0.622, AUC: 0.673.
 
-| Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Contrato | Inicio | Fin | Real | RF | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | C-001 | 2018 | 2019 | 28.6% | 25.01% | −3.6 pp | 81.7% | ALTO RIESGO | 12 | 16 pp | 3.0% | 24.3% | 44.9% | 41.9 pp |
 | C-010 | 2018 | 2020 | 37.3% | 16.84% | −20.5 pp | 41.0% | RIESGO MODERADO | 20 | 16 pp | −3.3% | 16.8% | 37.4% | 40.7 pp |
 | C-017 | 2019 | 2022 | 53.1% | 33.16% | −19.9 pp | 91.7% | ALTO RIESGO | 18 | 16 pp | 12.8% | 33.0% | 53.7% | 40.9 pp |
@@ -659,12 +697,12 @@ Modelo SVR con 35 features (30 TF-IDF + 5 rango: anio_inicio, anio_fin, duracion
 
 ### 11.4 Validación contra Notebook (histórico)
 
-El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El modelo API actual es SVR con 35 features (rango de fechas). Las predicciones difieren por el cambio de modelo y feature set. Los resultados detallados del SVR se documentan en las secciones 11.3 y 11.5.
+El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El modelo API actual es RandomForest con 38 features (rango de fechas + mitigación). Las predicciones difieren por el cambio de modelo y feature set. Los resultados detallados del RF se documentan en las secciones 11.3 y 11.5.
 
 ### 11.5 Resultados Grupo B — Prueba de Generalización
 
-| Contrato | Inicio | Fin | Real | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Contrato | Inicio | Fin | Real | RF | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | C-360 | 2019 | 2019 | 10.14% | 15.55% | +5.4 pp | 21.4% | RIESGO MODERADO | 14 | 16 pp | −3.4% | 16.5% | 35.5% | 38.9 pp |
 | C-361 | 2022 | 2022 | 19.09% | 16.99% | −2.1 pp | 60.2% | ALTO RIESGO | 28 | 20 pp | −8.5% | 17.7% | 43.4% | 51.9 pp |
 | C-362 | 2021 | 2021 | 4.38% | 9.54% | +5.2 pp | 21.4% | RIESGO MODERADO | 27 | 20 pp | −15.2% | 10.0% | 35.3% | 50.5 pp |
@@ -673,23 +711,23 @@ El `modelado_v2.ipynb` se entrenó con Ridge de 33 features (año único). El mo
 
 **MAE:** 6.1 pp (< 20 pp ✅) | **Aciertos:** 4/5  
 **Tiempo de respuesta:** < 2s por contrato (< 5s ✅)  
-**Conclusión:** El SVR generaliza muy bien en datos no vistos (MAE 6.1 pp). C-364 (34 riesgos) tiene el intervalo más amplio (P90-P10=62.2 pp) por su RMSE de 24 pp, reflejando correctamente su alta complejidad.
+**Conclusión:** El RandomForest generaliza muy bien en datos no vistos (MAE 6.1 pp). C-364 (34 riesgos) tiene el intervalo más amplio (P90-P10=62.2 pp) por su RMSE de 24 pp, reflejando correctamente su alta complejidad.
 
 ### 11.6 Resultados Grupo C — Predicción a Futuro (C-365 Puente Aranda)
 
 Contrato activo de SECOP II (no terminado). Matriz de 25 riesgos del IDU Bogotá para la construcción de la intersección a desnivel de Puente Aranda (Troncal Calle 13). Valor: $477,834,784,322. Proyección: 2023-2027. Ejecutado el 2026-07-16 vía frontend (5,000 iteraciones MC).
 
-| Contrato | Inicio | Fin | SVR | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
+| Contrato | Inicio | Fin | RF | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 |
 |----------|-------|-----|-----|-------|--------|---------|------|-----|-----|-----|---------|
 | C-365 | 2023 | 2027 | 28.16% | 92.0% | ALTO RIESGO | 25 | 20 pp | 3.04% | 28.07% | 54.46% | 51.42 pp |
 
-**Interpretación:** SVR = 28.2%, clasificado como ALTO RIESGO (92.0%). En COP: sobrecosto esperado de $134.1 mil M (P50), con rango P10-P90 de $14.5 mil M a $260.2 mil M. Los riesgos más influyentes son indemnizaciones a terceros, variación de precios (global), y daños a la obra.
+**Interpretación:** RF = 28.2%, clasificado como ALTO RIESGO (92.0%). En COP: sobrecosto esperado de $134.1 mil M (P50), con rango P10-P90 de $14.5 mil M a $260.2 mil M. Los riesgos más influyentes son indemnizaciones a terceros, variación de precios (global), y daños a la obra.
 
 ### 11.7 Resultados Grupo D — Sensibilidad Temporal (C-128 en 13 Rangos)
 
 Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 2010 a 2024 para medir el efecto del contexto macro (IPC, TRM). Automatizado vía API con script dedicado (13 llamadas a `/predict` + `/predict/montecarlo`).
 
-| ID | Inicio | Fin | SVR | Prob. | Alerta | RMSE | P10 | P50 | P90 | P90-P10 |
+| ID | Inicio | Fin | RF | Prob. | Alerta | RMSE | P10 | P50 | P90 | P90-P10 |
 |----|-------|-----|-----|-------|--------|------|-----|-----|-----|---------|
 | C-128-2010-2012 | 2010 | 2012 | 26.12% | 70.1% | ALTO RIESGO | 16 pp | 5.53% | 26.21% | 46.74% | 41.21 pp |
 | C-128-2011-2013 | 2011 | 2013 | 26.23% | 72.9% | ALTO RIESGO | 16 pp | 5.67% | 26.35% | 46.87% | 41.20 pp |
@@ -705,7 +743,7 @@ Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 20
 | C-128-2021-2023 | 2021 | 2023 | 27.69% | 66.2% | ALTO RIESGO | 16 pp | 6.89% | 27.67% | 48.22% | 41.33 pp |
 | C-128-2022-2024 | 2022 | 2024 | 26.32% | 67.3% | ALTO RIESGO | 16 pp | 5.65% | 26.37% | 46.98% | 41.33 pp |
 
-**Hallazgo clave:** La predicción SVR varía solo **2.2 pp** (26.1%–28.3%) a pesar de 14 años de contexto macro distinto. El modelo depende más de la matriz de riesgos (TF-IDF + categorías) que de las features temporales (IPC acumulado, TRM). Pico en 2015-2017 (crisis fiscal), valle en 2010-2012. P90-P10 estable en ~41.2 pp para todos los rangos.
+**Hallazgo clave:** La predicción RF varía solo **2.2 pp** (26.1%–28.3%) a pesar de 14 años de contexto macro distinto. El modelo depende más de la matriz de riesgos (TF-IDF + categorías) que de las features temporales (IPC acumulado, TRM). Pico en 2015-2017 (crisis fiscal), valle en 2010-2012. P90-P10 estable en ~41.2 pp para todos los rangos.
 
 ---
 
@@ -742,3 +780,11 @@ Misma matriz (C-128, 15 riesgos) ejecutada en 13 rangos bienales solapados de 20
 | 2026-07-16 | **C-128 temporal re-ejecutado** con RMSE dinámico + safety factor 0.85. 13 rangos, RMSE=13.6 pp constante, P90-P10=~35 pp (reducción de ~6 pp vs heurística). Resultados actualizados en `tests/data/c-128_temporal.csv`. |
 | 2026-07-16 | **Documentación RMSE Predictor**: se agregó sección 8.6 en `tests/plan_de_pruebas.md` con integración en backend, código completo, qué hace, por qué y características del modelo. Se agregó 8.8.1 en `docs/proceso.md` con el mismo detalle. |
 | 2026-07-16 | **Diagramas actualizados**: se regeneraron `8_4_flujo_de_datos_predicci_n.mmd` (con RMSE Predictor + safety factor + SHAP), `8_7_pipeline_completo.mmd` (con RMSE Predictor branch), `8_8_arquitectura_del_sistema.mmd` (con rmse_predictor.pkl). Nuevo diagrama `8_10_desglose_riesgos_shap.mmd`. |
+| 2026-07-20 | **Migración a dataset completo**: `docs/matriz.csv` reemplazado con versión completa de `Tesis/Matrices/matriz.csv` (7,914 filas, **429 contratos**, 182 malformadas reparadas). Normalización: 87,260 valores. Gap C-352 a C-365 documentado como espacio de testing. |
+| 2026-07-20 | **Consolidado 35 features**: `scripts/consolidar_35_features.py` genera `docs/consolidado_35_features.csv` (428 contratos × 35 features: 30 TF-IDF/proporciones + 5 macro). Top 1: `tfidf_demoras` (0.057). 0 NaN. Listo para entrenar 10 modelos. |
+| 2026-07-20 | **Re-benchmarking completo** (modelo_final.ipynb): 10 modelos con nested CV 5x5 + HalvingSearch. **Ridge nuevo campeón** (R²=0.086 hold-out, RMSE=17.97). SVR desbancado (R² negativo en test). Se agregó evaluación en test set con métricas de clasificación (Accuracy, Precision, Recall, F1, AUC) para todos los modelos. |
+| 2026-07-20 | **Benchmark de clasificadores binarios** (>25% sobrecosto): nested CV con LogisticRegression, RandomForest, GradientBoosting, SVC (RBF). **SVC RBF ganó** (AUC=0.654±0.061). Se guardó como `models/classifier.pkl`. |
+| 2026-07-20 | **RMSE Predictor re-entrenado sobre residuales de Ridge**: se cambió de SVR Linear a **SVR RBF** (ganó benchmark con MAE=7.30 pp vs heurística 8.37 pp). Backend actualizado: `mlflow_tracker.py` carga `ridge_regressor.pkl`, `predictor.py` con `MODEL_META` apuntando a Ridge. |
+| 2026-07-21 | **Sección 13 en modelo_final.ipynb**: benchmark independiente de meta-modelos para RMSE Predictor (6 modelos: Ridge, Lasso, SVR Linear, SVR RBF, RandomForest, GradientBoosting). SVR RBF campeón. |
+| 2026-07-21 | **Migración de Ridge→RandomForest**. 38 features (30 RF-selected + 5 rango + 3 mitigación). 575 contratos. R² full=0.622. `predictor.py` con MODEL_META→RF. `mlflow_tracker.py` carga `modelo_campeon.pkl`. SHAP TreeExplainer y MC batch-vectorizado en `quantitative_analysis.py`. |
+| 2026-07-22 | **Actualización dashboard**: 575 contratos, 11,029 riesgos, 38 features. Feature labels legibles. Timeout MC optimizado. |

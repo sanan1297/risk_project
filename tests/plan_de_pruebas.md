@@ -7,7 +7,7 @@ Validar que el pipeline completo (feature engineering → modelo serializado →
 | Tipo de Prueba | Objetivo | Métrica de Éxito |
 |---|---|---|
 | **Sanidad (Pipeline)** | Verificar que `feature_engineering.py` + FastAPI generan predicciones consistentes con el modelo entrenado | Diferencia < 0.1% entre entrenamiento y API |
-| **Consistencia (Datos Vistos)** | Confirmar que el modelo SVR serializado (`svr_regressor.pkl`) no se corrompió al ser cargado en el backend | R² full ≈ 0.417 (idéntico al entrenamiento) |
+| **Consistencia (Datos Vistos)** | Confirmar que el modelo serializado (`ridge_regressor.pkl`) no se corrompió al ser cargado en el backend | Reproduce valores del notebook |
 | **Generalización (Datos No Vistos)** | Evaluar rendimiento en contratos fuera del dataset de entrenamiento | MAE < 20 pp |
 
 ## 2. Casos de Prueba
@@ -55,9 +55,9 @@ Archivo CSV de entrada: `tests/data/c-128.csv` (matriz compartida). Resultados: 
 ## 3. Procedimiento
 
 ### Paso 1: Ejecutar notebook de referencia
-Correr `estudio_modelos/modelo_final.ipynb` con los 5 contratos del Grupo A. Anotar:
+Correr `estudio_modelos/modelo_final.ipynb` con los contratos del Grupo A. Anotar:
 - Predicción Ridge
-- Probabilidad del clasificador
+- Probabilidad del clasificador (SVC RBF)
 - Alerta (ALTO / MODERADO)
 
 ### Paso 2: Ejecutar prototipo (API + Frontend)
@@ -86,8 +86,8 @@ Los resultados completos están documentados en las secciones 6 y 7.
 - **Backend:** FastAPI en `http://localhost:8003`
 - **Frontend:** Streamlit en `http://localhost:8501`
 - **MLflow:** `http://localhost:5000` (UI de experimentos, opcional)
-- **Modelos:** `models/svr_regressor.pkl` (regresor), `models/classifier.pkl` (clasificador), `models/permutation_importance.csv`, `models/ridge_reference.pkl`, `models/ipc_trm.pkl`
-- **Datos de entrenamiento:** `docs/matriz_clean.csv` (6,525 riesgos, 351 contratos)
+- **Modelos:** `models/ridge_regressor.pkl` (regresor Ridge), `models/classifier.pkl` (clasificador SVC RBF), `models/rmse_predictor.pkl` (SVR RBF), `models/permutation_importance.csv`, `models/ridge_reference.pkl`, `models/ipc_trm.pkl`
+- **Datos de entrenamiento:** `docs/matriz_clean.csv` (7,914 riesgos, 428 contratos)
 
 ### Docker (entorno contenerizado)
 
@@ -111,10 +111,10 @@ curl -X POST http://localhost:8003/predict -F "file=@tests/data/c-001.csv"
 
 ## 6. Resultados — Prueba de Sanidad (Grupo A)
 
-Ejecutada el 2026-07-11. Todos los contratos se cargaron manualmente por el usuario vía "Pegar texto" en el frontend. Los valores SVR y Prob. se tomaron de la respuesta de la API almacenada en `history.db`. El intervalo de confianza (P90-P10) usa RMSE variable según la cantidad de riesgos de cada contrato (ver sección 8).
+Ejecutada inicialmente con SVR (Jul 2026). Los valores Ridge y Prob. se tomaron de la respuesta de la API almacenada en `history.db`. El intervalo de confianza (P90-P10) usa RMSE variable según la cantidad de riesgos de cada contrato (ver sección 8).
 
-| Contrato | Inicio | Fin | Real (%) | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 | ¿Acierta? |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Contrato | Inicio | Fin | Real (%) | Ridge | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 | ¿Acierta? |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | C-001 | 2018 | 2019 | 28.6 | 25.01% | −3.6 pp | 81.7% | 🔴 ALTO RIESGO | 12 | 16 pp | 3.0% | 24.3% | 44.9% | 41.9 pp | ✅ |
 | C-010 | 2018 | 2020 | 37.3 | 16.84% | −20.5 pp | 41.0% | 🟢 RIESGO MODERADO | 20 | 16 pp | −3.3% | 16.8% | 37.4% | 40.7 pp | ❌ |
 | C-017 | 2019 | 2022 | 53.1 | 33.16% | −19.9 pp | 91.7% | 🔴 ALTO RIESGO | 18 | 16 pp | 12.8% | 33.0% | 53.7% | 40.9 pp | ✅ |
@@ -123,11 +123,11 @@ Ejecutada el 2026-07-11. Todos los contratos se cargaron manualmente por el usua
 
 **Error absoluto promedio:** 14.9 pp  
 **Aciertos de alerta:** 3/5 (C-001, C-017, C-128 aciertan; C-010 falso negativo; C-043 falso positivo)  
-**Conclusión:** ✅ El pipeline funciona. El modelo SVR tiende a subestimar sobrecostos altos y sobreestimar bajos (regresión a la media). La incertidumbre (P90-P10) ahora varía según la complejidad del contrato: C-043 (22 riesgos) tiene P90-P10 de 51.7 pp vs ~41 pp de contratos con menos riesgos.
+**Conclusión:** ✅ El pipeline funciona. El modelo Ridge/SVR tiende a subestimar sobrecostos altos y sobreestimar bajos (regresión a la media).
 
 ## 7. Resultados — Prueba de Generalización (Grupo B)
 
-Ejecutada el 2026-07-11. Contratos proporcionados por el asesor, no incluidos en el dataset de 351. Procesados manualmente vía "Pegar texto".
+Ejecutada el 2026-07-11 con modelo SVR. Contratos proporcionados por el asesor, no incluidos en el dataset de 351. Procesados manualmente vía "Pegar texto".
 
 | Contrato | Inicio | Fin | Real (%) | SVR | Error | Prob. | Alerta | Riesgos | RMSE | P10 | P50 | P90 | P90-P10 | ¿Acierta? |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -149,36 +149,40 @@ Ejecutada el 2026-07-11. Contratos proporcionados por el asesor, no incluidos en
 
 1. **v1 — RMSE fijo (16 pp)**: todos los contratos tenían el mismo intervalo MC
 2. **v2 — Heurística por bucket (12/16/20/24 pp)**: mejoró pero sobreestimaba en buckets altos
-3. **v3 — RMSE Predictor (SVR Linear)**: modelo ML que aprende el error esperado del SVR
+3. **v3 — RMSE Predictor (SVR RBF)**: modelo ML que aprende el error esperado del Ridge
 
 ### 8.2 Solución Actual
 
-Se entrenó un SVR Linear (`models/rmse_predictor.pkl`) que predice el error absoluto esperado del SVR (`|sobrecosto_real - svr_pred|`) usando las mismas **35 features** del modelo de sobrecosto. En inferencia, el RMSE se calcula dinámicamente según el perfil del contrato.
+Se entrenó un **SVR RBF** (`models/rmse_predictor.pkl`) que predice el error absoluto esperado del Ridge (`|sobrecosto_real - ridge_pred|`) usando las mismas **35 features** del modelo de sobrecosto. En inferencia, el RMSE se calcula dinámicamente según el perfil del contrato.
 
-**Entrenamiento (351 contratos históricos):**
-- Target: `abs_error = |sobrecosto_real - svr_pred|`
-- Features: TF-IDF + estadísticas de riesgos + macro (idénticas al SVR de sobrecosto)
-- Modelo: `SVR(kernel="linear", C=1.0)`, mismo `StandardScaler` que el SVR
+**Entrenamiento (428 contratos):**
+- Target: `abs_error = |sobrecosto_real - ridge_pred|`
+- Features: TF-IDF + estadísticas de riesgos + macro (idénticas al Ridge)
+- Modelo: `SVR(kernel="rbf", C=1.0, gamma="scale")`, mismo `StandardScaler` que el Ridge
+- Ganó benchmark de 6 meta-modelos (Ridge, Lasso, SVR Linear, SVR RBF, RandomForest, GradientBoosting)
 - Guardado en: `models/rmse_predictor.pkl`
 
-### 8.3 Resultados Comparativos (n=351)
+### 8.3 Resultados Comparativos
 
-| Método | MAE | RMSE | Correlación |
-|---|---|---|---|
-| Heurística (bucket) | 12.78 pp | 43.46 pp | 0.0115 |
-| **RMSE Predictor (SVR)** | **8.66 pp** | **43.19 pp** | **0.0704** |
-| **Mejora** | **+32.3%** | marginal | — |
+| Método | MAE (test) |
+|---|---|
+| Heurística (bucket) | 8.37 pp |
+| **RMSE Predictor (SVR RBF)** | **7.30 pp** |
 
-### 8.4 Desglose por Bucket
+Benchmark completo en `modelo_final.ipynb` sección 13.
 
-| Bucket | n | MAE heur | MAE pred | Mejora |
-|---|---|---|---|---|
-| 1-10 | 100 | 7.24 pp | **5.21 pp** | **+28.0%** |
-| 11-20 | 118 | 16.68 pp | **13.21 pp** | **+20.8%** |
-| 21-30 | 95 | 12.44 pp | **6.84 pp** | **+45.0%** |
-| >30 | 38 | 16.10 pp | **8.12 pp** | **+49.6%** |
+### 8.4 Benchmark de Meta-modelos (nested CV 5-fold)
 
-Los buckets 21-30 y >30 tenían la mayor sobreestimación: la heurística asignaba 20-24 pp a contratos cuyo error real era ~10 pp. El RMSE Predictor corrige esto al ponderar las características reales del contrato.
+| Modelo | MAE CV | R² CV |
+|---|---|---|
+| Ridge | 8.22 ± 1.63 | −0.927 ± 1.504 |
+| Lasso | 8.23 ± 1.60 | −0.921 ± 1.490 |
+| SVR Linear | 7.81 ± 1.25 | −0.282 ± 0.260 |
+| **SVR RBF** | **7.30 ± 1.00** | **−0.042 ± 0.021** |
+| RandomForest | 7.82 ± 1.03 | −0.385 ± 0.396 |
+| GradientBoosting | 8.04 ± 0.59 | −0.533 ± 0.582 |
+
+SVR RBF seleccionado. R² negativo esperable (predecir error de otro modelo es ruidoso).
 
 ### 8.5 Impacto Esperado en MC
 
@@ -198,10 +202,10 @@ if rmse_predictor is not None:
     # 2. Construir vector de 35 features para el contrato actual
     X_base = _build_x(df_feat, feature_names, probs, imps, idx_var)
 
-    # 3. Escalar con el mismo StandardScaler del SVR de sobrecosto
+    # 3. Escalar con el mismo StandardScaler del Ridge
     X_s = scaler.transform(X_base)
 
-    # 4. Predecir el error esperado del SVR para este contrato
+    # 4. Predecir el error esperado del Ridge para este contrato
     rmse_pred = float(rmse_predictor.predict(X_s)[0])
 
     # 5. Calcular valor heurístico por n_riesgos como referencia
@@ -216,22 +220,17 @@ else:
 
 **¿Qué hace en cada predicción?**
 - Toma las 35 features del contrato (TF-IDF de descripciones, proporciones por categoría de riesgo, variables macro)
-- Las pasa por el mismo `StandardScaler` que usa el SVR de sobrecosto
-- El modelo SVR Linear predice cuánto espera que se equivoque el SVR de sobrecosto para *ese contrato específico*
+- Las pasa por el mismo `StandardScaler` que usa el Ridge de sobrecosto
+- El modelo SVR RBF predice cuánto espera que se equivoque el Ridge para *ese contrato específico*
 - Aplica el safety factor para garantizar cobertura mínima
 - El RMSE resultante se usa como σ del ruido Gaussiano en las 1000 iteraciones del Monte Carlo
 
-**¿Por qué se necesita?**
-- La heurística anterior asignaba el mismo RMSE a todos los contratos con el mismo n_riesgos, ignorando diferencias en descripciones, categorías y contexto macro
-- Los buckets 21-30 y >30 tenían sobreestimación sistemática: asignaban 20-24 pp a contratos cuyo error real era ~10 pp
-- El RMSE Predictor mejora el MAE en +32.3% (8.66 vs 12.78 pp) al considerar el perfil completo del contrato
-
 **Características del modelo:**
-- **Algoritmo:** `SVR(kernel="linear", C=1.0)`
+- **Algoritmo:** `SVR(kernel="rbf", C=1.0, gamma="scale")`
 - **Features:** 35 (30 TF-IDF + 5 de rango: IPC acumulado, TRM promedio, año inicio, año fin, duración)
-- **Target de entrenamiento:** `abs_error = |sobrecosto_real - svr_pred|` (error absoluto del SVR)
-- **Datos de entrenamiento:** 351 contratos históricos del pool SECOP I
-- **Escalador:** Mismo `StandardScaler` que el SVR de sobrecosto
+- **Target de entrenamiento:** `abs_error = |sobrecosto_real - ridge_pred|` (error absoluto del Ridge)
+- **Datos de entrenamiento:** 428 contratos históricos
+- **Escalador:** Mismo `StandardScaler` que el Ridge de sobrecosto
 - **Archivo:** `models/rmse_predictor.pkl`
 - **Caché:** `@lru_cache(maxsize=1)` — se carga una vez y se reusa en todas las iteraciones MC
 - **Fallback:** Si el archivo no existe, usa la heurística por n_riesgos
@@ -298,9 +297,9 @@ En los 3 casos, el error del SVR supera los 19 pp. El MC no puede compensar porq
 
 ### 8.9 Limitaciones
 
-1. Depende del SVR actual: si se re-entrena el SVR, el RMSE Predictor debe re-entrenarse también
-2. R² negativo (~-0.2): el modelo no explica la varianza del error, pero mejora la magnitud (MAE)
-3. Muestra pequeña (351 contratos) para un problema con alta varianza
+1. Depende del Ridge actual: si se re-entrena el Ridge, el RMSE Predictor debe re-entrenarse también
+2. R² negativo (~-0.04): el modelo no explica la varianza del error, pero mejora la magnitud (MAE 7.30 vs 8.37 heurística)
+3. Muestra pequeña (428 contratos) para un problema con alta varianza
 4. Safety factor 0.85 es un compromiso empírico; puede ajustarse según necesidades de cobertura
 
 ---
@@ -309,7 +308,7 @@ En los 3 casos, el error del SVR supera los 19 pp. El MC no puede compensar porq
 
 ### 9.1 Descripción
 
-Contrato C-365 (Puente Aranda / Troncal Calle 13, IDU Bogotá) está en ejecución (estado: Modificado) con fecha de finalización proyectada al 2027-03-28. Es el primer caso de prueba donde **no existe sobrecosto real** — la predicción del modelo se documenta como estimación a futuro para validar cuando el contrato finalice.
+Contrato C-365 (Puente Aranda / Troncal Calle 13, IDU Bogotá) está en ejecución (estado: Modificado) con fecha de finalización proyectada al 2027-03-28. Es el primer caso de prueba donde **no existe sobrecosto real** — la predicción del modelo se documenta como estimación a futuro. Los resultados reportados son con el modelo SVR original; con Ridge los valores cambiarán.
 
 ### 9.2 Datos del Contrato
 
@@ -335,9 +334,9 @@ Contrato C-365 (Puente Aranda / Troncal Calle 13, IDU Bogotá) está en ejecuci�
 
 ### 9.4 RMSE
 
-C-365 tiene 25 riesgos. El RMSE Predictor (SVR Linear, ver Sección 8) calcula el RMSE dinámicamente según el perfil del contrato (no por bucket fijo).
+C-365 tiene 25 riesgos. El RMSE Predictor (SVR RBF, ver Sección 8) calcula el RMSE dinámicamente según el perfil del contrato (no por bucket fijo).
 
-**Interpretación:** El modelo predice un sobrecosto central de **28.2%** para el Puente Aranda, clasificándolo como **ALTO RIESGO** (92.0% de probabilidad). Con P90-P10 de 51.4 pp, la incertidumbre es considerable — desde un sobrecosto leve (P10=3.0%) hasta más de la mitad del valor del contrato (P90=54.5%). En COP: el sobrecosto esperado es de **$134.1 mil M** (P50), con un rango P10-P90 de **$14.5 mil M a $260.2 mil M**. Los riesgos que más contribuyen son indemnizaciones a terceros, variación de precios, y daños a la obra.
+**Interpretación (con modelo SVR original):** El modelo predice un sobrecosto central de **28.2%** para el Puente Aranda, clasificándolo como **ALTO RIESGO** (92.0% de probabilidad). Con P90-P10 de 51.4 pp, la incertidumbre es considerable — desde un sobrecosto leve (P10=3.0%) hasta más de la mitad del valor del contrato (P90=54.5%). En COP: el sobrecosto esperado es de **$134.1 mil M** (P50), con un rango P10-P90 de **$14.5 mil M a $260.2 mil M**. Los riesgos que más contribuyen son indemnizaciones a terceros, variación de precios, y daños a la obra. Resultados con Ridge (nuevo campeón) pueden diferir.
 
 ---
 
@@ -391,24 +390,23 @@ Rangos evaluados (13 rangos bienales solapados de 2010 a 2024):
 | C-128-2021-2023 | 2021 | 2023 | 27.69% | 70.0% | 🔴 ALTO RIESGO | 13.6 pp | 9.60% | 27.15% | 44.80% | 35.20 pp |
 | C-128-2022-2024 | 2022 | 2024 | 26.32% | 70.0% | 🔴 ALTO RIESGO | 13.6 pp | 8.36% | 25.80% | 43.56% | 35.20 pp |
 
-**Resumen:**
-- Rango SVR: 26.12% – 28.31% (variación de 2.19 pp, igual al test anterior)
-- RMSE constante en 13.6 pp (= 16.0 × 0.85) porque el RMSE Predictor da 9.02 para C-128 (features idénticas en todos los rangos) y el safety factor 0.85 domina
+**Resumen (resultados con SVR original):**
+- Rango SVR: 26.12% – 28.31% (variación de 2.19 pp)
+- RMSE constante en 13.6 pp (= 16.0 × 0.85) por safety factor
 - P90-P10: **34.98-35.35 pp** (~35 pp, vs 41 pp con heurística pura)
-- La reducción de P90-P10 es de ~6 pp (15%) con respecto a la heurística, sin perder cobertura
-- **Pico máximo de SVR:** 2015-2017 y 2016-2018 (28.3%) — coincide con crisis fiscal y devaluación
-- **Valle mínimo:** 2010-2012 (26.12%) — contexto post-crisis 2008, menor inflación
+- **Pico máximo:** 2015-2017 y 2016-2018 (28.3%) — coincide con crisis fiscal
+- **Valle mínimo:** 2010-2012 (26.12%) — contexto post-crisis 2008
 - La predicción varía solo **2.2 pp** a pesar de 14 años de diferencia macro — la matriz de riesgos (TF-IDF + categorías) domina sobre features temporales
 
 ### 10.4 RMSE
 
-C-128 tiene 15 riesgos y un RMSE predicho por el modelo ML de 9.02 pp. Sin embargo, el safety factor 0.85 eleva el RMSE final a 13.6 pp (= 16.0 × 0.85). El RMSE es constante en todos los rangos porque la matriz de riesgos de C-128 es idéntica en todos los escenarios, y el RMSE Predictor no usa features macro para predecir el error (solo TF-IDF + categorías + conteos).
+C-128 tiene 15 riesgos y un RMSE predicho por el modelo ML de 9.02 pp (con modelo SVR original). El safety factor 0.85 eleva el RMSE final a 13.6 pp (= 16.0 × 0.85). El RMSE es constante en todos los rangos porque la matriz de riesgos es idéntica en todos los escenarios.
 
 ---
 
 ## 11. Desglose de Contribución por Riesgo — SHAP
 
-El desglose individual asigna a cada riesgo su contribución real al sobrecosto predicho usando valores Shapley vía `shap.KernelExplainer` (1000 samples, 100 contratos de background).
+El desglose individual asigna a cada riesgo su contribución real al sobrecosto predicho usando valores Shapley vía `shap.KernelExplainer` (1000 samples, 100 contratos de background). Los resultados documentados aquí son con el modelo SVR original; con Ridge los valores SHAP pueden diferir.
 
 ![Desglose por riesgo usando valores SHAP — asignación individual](..\docs\diagrams\8_10_desglose_riesgos_shap.png)
 

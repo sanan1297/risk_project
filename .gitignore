@@ -17,3 +17,5 @@ Thumbs.db
 
 # Data evidence — tracked in git
 # contratos/*.csv y contratos/*.xlsx se suben como evidencia
+
+mlruns/

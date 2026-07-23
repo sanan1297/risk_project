@@ -8,13 +8,27 @@ from .predictor import MODEL_META
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load_matriz() -> pd.DataFrame:
-    path = ROOT / "docs" / "matriz_clean.csv"
+def _load_consolidado() -> pd.DataFrame:
+    path = ROOT / "docs" / "consolidado_38_features.csv"
     return pd.read_csv(path)
 
 
-def _load_coeficientes() -> pd.DataFrame:
-    path = ROOT / "models" / "coeficientes_ridge.csv"
+def _load_matriz() -> pd.DataFrame:
+    import csv as csv_mod
+    path = ROOT / "docs" / "matriz.csv"
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        reader = csv_mod.reader(f)
+        rows = [row[:20] for row in reader]
+    header = rows[0]
+    data = rows[1:]
+    df = pd.DataFrame(data, columns=header)
+    for c in ["valor_inicial", "valor_final", "sobrecosto", "probabilidad", "impacto", "valoracion"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+
+def _load_feature_importances() -> pd.DataFrame:
+    path = ROOT / "models" / "feature_importances_rf.csv"
     return pd.read_csv(path)
 
 
@@ -24,22 +38,14 @@ def _load_ipc_trm() -> dict:
 
 
 def compute() -> dict:
+    df = _load_consolidado()
     matriz = _load_matriz()
-    coefs = _load_coeficientes()
+    coefs = _load_feature_importances()
     ipc_trm_data = _load_ipc_trm()
 
-    n_riesgos_raw = len(matriz)
-    n_contratos_raw = int(matriz["id_contrato"].nunique())
+    sc = df["sobrecosto"]
+    n_contratos = len(df)
 
-    contratos = matriz.groupby("id_contrato", sort=False).agg(
-        sobrecosto=("sobrecosto", "first"),
-        n_riesgos=("id_riesgo", "nunique"),
-    ).reset_index()
-    contratos = contratos[contratos["sobrecosto"] < 200].copy()
-    n_contratos = len(contratos)
-    n_riesgos_filtro = int(contratos["n_riesgos"].sum())
-
-    sc = contratos["sobrecosto"]
     bins = [0, 10, 25, 50, 100, sc.max()]
     labels = ["0-10%", "10-25%", "25-50%", "50-100%", "100%+"]
     dist_bins = pd.cut(sc, bins=bins, labels=labels, right=True, include_lowest=True)
@@ -50,17 +56,13 @@ def compute() -> dict:
     dist_sobrecosto["cantidad"] = dist_sobrecosto["cantidad"].astype(int)
 
     top_aumentan = (
-        coefs.sort_values("coef", ascending=False)
+        coefs.sort_values("importance", ascending=False)
         .head(5)
+        .rename(columns={"importance": "coef"})
         .assign(tipo="aumenta")
         .to_dict(orient="records")
     )
-    top_disminuyen = (
-        coefs.sort_values("coef", ascending=True)
-        .head(5)
-        .assign(tipo="disminuye")
-        .to_dict(orient="records")
-    )
+    top_disminuyen = []
 
     cat_counts = matriz["categoria"].value_counts().reset_index()
     cat_counts.columns = ["categoria", "cantidad"]
@@ -76,8 +78,17 @@ def compute() -> dict:
     pool_path = ROOT / "contratos" / "proyectos_secop1_lite.csv"
     n_pool = len(pd.read_csv(pool_path)) if pool_path.exists() else 0
 
-    # Riesgos por contrato
-    riesgos_pc = contratos["n_riesgos"]
+    n_riesgos_raw = len(matriz)
+    n_contratos_raw = int(matriz["id_contrato"].nunique())
+
+    contratos_riesgos = matriz.groupby("id_contrato", sort=False).agg(
+        sobrecosto=("sobrecosto", "first"),
+        n_riesgos=("id_riesgo", "nunique"),
+    ).reset_index()
+    contratos_riesgos = contratos_riesgos[contratos_riesgos["sobrecosto"] < 200].copy()
+    n_riesgos_filtro = int(contratos_riesgos["n_riesgos"].sum())
+
+    riesgos_pc = contratos_riesgos["n_riesgos"]
     dist_n_riesgos = {
         "min": int(riesgos_pc.min()),
         "max": int(riesgos_pc.max()),
@@ -85,31 +96,31 @@ def compute() -> dict:
         "mediana": int(riesgos_pc.median()),
     }
 
-    # Top contratos mas riesgosos (por n_riesgos)
     top_n_riesgos = (
-        contratos.sort_values("n_riesgos", ascending=False)
+        contratos_riesgos.sort_values("n_riesgos", ascending=False)
         .head(5)
         .assign(sobrecosto=lambda x: x["sobrecosto"].round(1))
         .to_dict(orient="records")
     )
 
-    # Top contratos con mayor sobrecosto
     top_sobrecosto = (
-        contratos.sort_values("sobrecosto", ascending=False)
-        .head(5)
+        df.nlargest(5, "sobrecosto")[["id_contrato", "sobrecosto"]]
+        .merge(contratos_riesgos[["id_contrato", "n_riesgos"]], on="id_contrato", how="left")
         .assign(sobrecosto=lambda x: x["sobrecosto"].round(1))
+        .fillna({"n_riesgos": 0})
+        .astype({"n_riesgos": int})
         .to_dict(orient="records")
     )
 
     return {
         "modelo": MODEL_META,
-        "total_contratos": n_contratos_raw,
-        "contratos_raw": n_contratos_raw,
+        "total_contratos": n_contratos,
+        "contratos_raw": n_contratos,
         "contratos_pool_secop1": n_pool,
         "contratos_secop2_incluidos": 5,
         "total_riesgos_matriz": n_riesgos_raw,
         "total_riesgos_filtro": n_riesgos_filtro,
-        "contratos_en_matriz": n_contratos_raw,
+        "contratos_en_matriz": n_contratos,
         "sobrecosto_promedio": round(sc.mean(), 1),
         "sobrecosto_mediana": round(sc.median(), 1),
         "porcentaje_alto_riesgo": round((sc > 25).mean(), 4),

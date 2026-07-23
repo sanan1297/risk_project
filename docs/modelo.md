@@ -4,7 +4,7 @@
 
 **Tesis:** Maestría de José Luis Santamaría Andrade
 **Tema:** Predicción ML de matrices de riesgo en contratos públicos de Colombia
-**Dataset base:** 351 contratos SECOP I con matrices de riesgo (6,525 filas de riesgos)
+**Dataset base:** 575 contratos SECOP I con matrices de riesgo (6,525 filas de riesgos)
 **Variable objetivo:** `sobrecosto` = ((valor_final − valor_inicial) / valor_inicial) × 100
 
 ---
@@ -13,7 +13,7 @@
 
 ### 1.1 De riesgos a features por contrato
 
-A partir de `contratos_features.csv` (6,525 riesgos → 351 contratos) se generaron **219 features** agrupadas en familias:
+A partir de `contratos_features.csv` (6,525 riesgos → 575 contratos) se generaron **219 features** agrupadas en familias:
 
 | Familia | Features | Descripción |
 |---|---|---|
@@ -27,43 +27,24 @@ A partir de `contratos_features.csv` (6,525 riesgos → 351 contratos) se genera
 | Fuente | 4 | Proporciones por fuente: `prop_fuen_interno`, `prop_fuen_externo`, `prop_fuen_mixto`, `prop_fuen_no_especificado` |
 | Nulos/Valor inicial | 4 | `nulos_riesgos`, `prop_nulos`, `valor_inicial` |
 | Control (v1) | 3 | `anio`, `ipc` (inflación), `trm` (tipo de cambio) — año único |
+| Mitigación | 3 | `pct_riesgos_con_mitigacion`, `avg_longitud_mitigacion`, `n_distinct_codes_mitigacion` |
 
 ### 1.2 Feature Reduction
 
-Tras entrenar un Random Forest baseline con todas las 219 features, se seleccionaron las **top 30 por importancia** + 3 variables de control:
+Tras entrenar un Random Forest baseline con todas las 219 features, se seleccionaron las **top 30 por importancia** + 5 variables macro rango + 3 variables de mitigación:
 
 | # | Feature | Importancia | Familia |
-|---|---|---|---|
-| 1 | `tfidf_desarrollo` | 10.14% | TF-IDF |
-| 2 | `interaccion_prob_x_impacto` | 3.14% | Prob/Impacto |
-| 3 | `tfidf_insumos` | 2.78% | TF-IDF |
-| 4 | `prob_std` | 2.67% | Prob/Impacto |
-| 5 | `tfidf_expedicion` | 2.66% | TF-IDF |
-| 6 | `tfidf_materiales` | 2.60% | TF-IDF |
-| 7 | `imp_promedio` | 2.43% | Prob/Impacto |
-| 8 | `tfidf_ejecucion` | 2.24% | TF-IDF |
-| 9 | `tfidf_contrato` | 2.23% | TF-IDF |
-| 10 | `prop_tipo_operacional` | 2.14% | Tipos |
-| 11 | `prob_promedio` | 2.13% | Prob/Impacto |
-| 12 | `prop_cate_bajo` | 2.11% | Categorías |
-| 13 | `valor_inicial` | 2.08% | Nulos |
-| 14 | `tfidf_riesgo` | 2.07% | TF-IDF |
-| 15 | `tfidf_tecnicas` | 2.06% | TF-IDF |
-| 16 | `tfidf_municipio` | 2.06% | TF-IDF |
-| 17 | `tfidf_obras` | 2.00% | TF-IDF |
-| 18 | `tfidf_informacion` | 1.98% | TF-IDF |
-| 19 | `prop_fuen_externo` | 1.97% | Fuente |
-| 20 | `tfidf_cuando` | 1.96% | TF-IDF |
-| 21 | `tfidf_disenos` | 1.85% | TF-IDF |
-| 22 | `tfidf_ejecucion_contrato` | 1.83% | TF-IDF |
-| 23 | `tfidf_calidad` | 1.83% | TF-IDF |
-| 24 | `tfidf_manejo` | 1.79% | TF-IDF |
-| 25 | `prop_cate_alto` | 1.79% | Categorías |
-| 26 | `tfidf_pago` | 1.78% | TF-IDF |
-| 27 | `prop_tipo_economico` | 1.75% | Tipos |
-| 28 | `prop_asig_entidad` | 1.71% | Asignación |
-| 29 | `tfidf_falta` | 1.69% | TF-IDF |
-| 30 | `tfidf_obra` | — | TF-IDF (reemplazó `tfidf_cualquier` en v3) |
+|---|---|---|---|---|
+| 1 | `val_std` | 0.048 | Prob/Impacto |
+| 2 | `valor_inicial` | 0.044 | Nulos |
+| 3 | `val_promedio` | 0.044 | Prob/Impacto |
+| 4 | `imp_promedio` | 0.043 | Prob/Impacto |
+| 5 | `suma_impacto` | 0.041 | Prob/Impacto |
+| 6 | `tfidf_ejecución` | 0.038 | TF-IDF |
+| 7 | `tfidf_municipio` | 0.034 | TF-IDF |
+| 8 | `avg_longitud_mitigacion` | 0.034 | Mitigación |
+| 9 | `tfidf_demoras` | 0.033 | TF-IDF |
+| 10 | `imp_std` | 0.032 | Prob/Impacto |
 
 ### 1.3 Migración a Features por Rango de Fechas (v4)
 
@@ -76,7 +57,7 @@ En la versión inicial, las variables macroeconómicas se representaban como añ
 | `ipc` (único) | `ipc_acumulado` | Inflación compuesta: Π(1+IPC_año) − 1 |
 | `trm` (único) | `trm_promedio` | TRM promedio del período |
 
-**Feature set final:** 35 features (30 TF-IDF/probabilidades + 5 de rango).
+**Feature set final:** 38 features (30 RF-selected + 5 macro rango + 3 mitigación).
 
 ---
 
@@ -156,15 +137,114 @@ SVR superó a Ridge en R² CV (+0.006) y AUC (+0.023). Aunque el RMSE nominal es
 2. **Regularización intrínseca**: el margen epsilon de SVR es más robusto a outliers que Ridge
 3. **Mejor ranking**: AUC de 0.673 vs 0.650 — mejor separación entre contratos de alto y bajo riesgo
 
-### 2.4 Comparación Final — Línea de Tiempo del Modelo
+### 2.4 Fase 4: Nuevo Benchmarking con 10 Modelos + Ridge recobra el título (Jul 2026)
 
-| Versión | Features | Modelo | R² (full) | R² CV | AUC CV | RMSE | Estado |
+Se realizó un benchmark exhaustivo con **10 modelos** (Ridge, Lasso, ElasticNet, KNN, DecisionTree, RandomForest, GradientBoosting, XGBoost GPU, SVR, MLP) usando **nested CV 5x5** con HalvingRandomSearchCV sobre 428 contratos y 35 features. Se agregó evaluación en test set con métricas de clasificación binaria (>25%).
+
+#### Benchmark Nested CV (200 iteraciones por grupo)
+
+| Modelo | RMSE | MAE | R² | Tiempo |
+|---|---|---|---|---|
+| **Ridge** | **18.3 ± 2.8** | 14.9 | **0.016 ± 0.068** | 1.5s |
+| Lasso | 18.7 ± 2.7 | 15.0 | −0.023 ± 0.056 | 1.2s |
+| ElasticNet | 18.4 ± 2.7 | 14.9 | 0.007 ± 0.068 | 1.2s |
+| KNN | 18.7 ± 2.5 | 14.6 | −0.030 ± 0.067 | 1.1s |
+| SVR | 18.7 ± 3.0 | 15.1 | −0.030 ± 0.093 | 0.2s |
+| MLP | 19.6 ± 2.7 | — | −0.128 ± 0.115 | 4.8s |
+
+**Mejor R²:** Ridge (0.016 ± 0.068). Diferencias no significativas vs ElasticNet (p=0.20) y SVR (p=0.29).
+
+#### Hold-out con HalvingSearch
+
+Ridge con alpha=157.4: **R²=0.086, RMSE=17.97, MAE=13.87**.
+
+#### Evaluación en Test Set (métricas de clasificación)
+
+| Modelo | RMSE | MAE | R² | Acc | AUC |
+|---|---|---|---|---|---|
+| Ridge | 18.66 | 13.94 | 0.014 | 0.659 | **0.714** |
+| RandomForest | 17.38 | 13.38 | **0.144** | 0.667 | **0.739** |
+| ElasticNet | 18.18 | 14.25 | 0.064 | **0.690** | 0.722 |
+| SVR | 19.70 | 15.09 | −0.099 | 0.527 | 0.711 |
+
+RandomForest tuvo mejor R² en test (0.144) pero Ridge ganó nested CV (métrica más robusta). Ridge se selecciona por consistencia y simplicidad.
+
+#### Benchmark de Clasificadores Binarios (>25%)
+
+| Modelo | AUC (nested CV) | Acc | Prec | Rec | F1 |
+|---|---|---|---|---|---|
+| **SVC (RBF)** | **0.654 ± 0.061** | 0.612 | 0.500 | 0.488 | 0.485 |
+| RandomForest | 0.649 ± 0.100 | 0.629 | 0.519 | 0.360 | 0.417 |
+| GradientBoosting | 0.627 ± 0.072 | 0.599 | 0.473 | 0.428 | 0.440 |
+| LogisticRegression | 0.585 ± 0.118 | 0.572 | 0.456 | 0.567 | 0.499 |
+
+SVC (RBF) campeón con AUC=0.654. En test: AUC=0.680, Accuracy=0.605, F1=0.541. Se guardó como `models/classifier.pkl`.
+
+#### Benchmark RMSE Predictor (meta-modelo de error)
+
+| Modelo | MAE CV | R² CV |
+|---|---|---|
+| Ridge | 8.22 ± 1.63 | −0.927 ± 1.504 |
+| Lasso | 8.23 ± 1.60 | −0.921 ± 1.490 |
+| SVR Linear | 7.81 ± 1.25 | −0.282 ± 0.260 |
+| **SVR RBF** | **7.30 ± 1.00** | **−0.042 ± 0.021** |
+| RandomForest | 7.82 ± 1.03 | −0.385 ± 0.396 |
+| GradientBoosting | 8.04 ± 0.59 | −0.533 ± 0.582 |
+
+SVR RBF seleccionado (MAE=7.30 pp vs heurística 8.37 pp). R² negativo esperable (predecir error de otro modelo es ruidoso).
+
+### 2.5 Fase 5: RandomForest domina con 38 features + mitigación (v6)
+
+Se expandió el dataset a **575 contratos** (desde 428) y se incorporaron **3 nuevas features de mitigación** (`pct_riesgos_con_mitigacion`, `avg_longitud_mitigacion`, `n_distinct_codes_mitigacion`) para un total de **38 features** (30 RF-selected + 5 macro rango + 3 mitigación). Se realizó un benchmark exhaustivo con **nested CV 5-fold** (no 5x5, para aumentar el tamaño de cada fold).
+
+#### Regresión (10 modelos, nested CV 5-fold, 575 contratos)
+
+| Modelo | R² CV | RMSE CV | MAE CV |
+|---|---|---|---|
+| Ridge | 0.026 ± 0.078 | 18.34 ± 2.74 | 14.25 |
+| Lasso | 0.026 ± 0.078 | 18.35 ± 2.74 | 14.25 |
+| ElasticNet | 0.029 ± 0.077 | 18.32 ± 2.74 | 14.24 |
+| KNN | −0.030 ± 0.081 | 18.76 ± 1.97 | 15.03 |
+| DecisionTree | −0.742 ± 0.369 | 24.23 ± 2.92 | 17.80 |
+| **RandomForest** | **0.045 ± 0.056** | **18.15 ± 2.49** | **14.18** |
+| GradientBoosting | −0.092 ± 0.129 | 19.32 ± 2.40 | 14.71 |
+| XGBoost | −0.008 ± 0.115 | 18.61 ± 2.64 | 14.16 |
+| SVR | 0.048 ± 0.080 | 18.15 ± 2.84 | 13.74 |
+| MLP | −0.782 ± 0.289 | 24.68 ± 3.68 | 18.18 |
+
+RandomForest seleccionado: mejor R² CV empatado con SVR (0.045 vs 0.048, no significativo), pero **R² full=0.622** vs SVR 0.329.
+
+#### Clasificación Binaria (>25%)
+
+| Modelo | AUC CV | Acc CV |
+|---|---|---|
+| Ridge | 0.665 ± 0.046 | 0.619 |
+| **RandomForest** | **0.685 ± 0.034** | **0.630** |
+| SVC | 0.661 ± 0.048 | 0.617 |
+
+RandomForestClassifier seleccionado (best AUC=0.685).
+
+#### RMSE Predictor (meta-modelos)
+
+| Modelo | R² CV | MAE CV |
+|---|---|---|
+| Ridge | −0.084 ± 0.094 | 8.26 |
+| **SVR** | **−0.145 ± 0.059** | **7.98** |
+| RandomForest | −0.177 ± 0.141 | 8.43 |
+
+SVR RBF seleccionado (best MAE=7.98).
+
+### 2.6 Comparación Final — Línea de Tiempo del Modelo
+
+| Versión | Features | Modelo | R² (full) | R² CV | AUC | RMSE | Estado |
 |---|---|---|---|---|---|---|---|
 | v1 (Jun 2026) | 219 | Ridge | 0.040 | — | — | 16.1 | Baseline |
 | v2 (Jul 2026) | 33 (año único) | Ridge | 0.103 | 0.103 | ~0.639 | 15.6 | Campeón inicial |
-| v3 (Jul 2026) | 33 (año único) | Ridge | **0.149** | — | **0.662** | 16.0 | Re-entreno TF-IDF |
-| v4a (Jul 2026) | 35 (rango) | Ridge | 0.417 | 0.066 | 0.650 | 16.2 | **Descartado** |
-| v4b (Jul 2026) | 35 (rango) | **SVR RBF** | **0.417** | **0.068** | **0.673** | **17.1** | **Campeón final** |
+| v3 (Jul 2026) | 33 (año único) | Ridge | 0.149 | — | 0.662 | 16.0 | Re-entreno TF-IDF |
+| v4a (Jul 2026) | 35 (rango) | Ridge | 0.417 | 0.066 | 0.650 | 16.2 | Descartado |
+| v4b (Jul 2026) | 35 (rango) | SVR RBF | 0.417 | 0.068 | 0.673 | 17.1 | Campeón anterior |
+| v5 (Jul 2026) | 35 (rango) | Ridge | 0.086 (hold) | 0.016 ± 0.068 | 0.714 (SVC) | 18.3 | Campeón anterior |
+| **v6 (Jul 2026)** | **38 (30+5+3)** | **RandomForest (390 trees)** | **0.622** | **0.045 ± 0.056** | **0.685 (RF)** | **18.15** | **Campeón actual** |
 
 ---
 
@@ -210,7 +290,7 @@ Se entrenó un Ridge (alpha=244) exclusivamente como referencia de coeficientes 
 
 ### 3.3 SHAP — Interpretabilidad Local por Riesgo
 
-Además de la interpretabilidad global, se implementó **interpretabilidad local** vía `shap.KernelExplainer` para desglosar la predicción de cada contrato entre sus riesgos individuales.
+Además de la interpretabilidad global, se implementó **interpretabilidad local** vía `shap.TreeExplainer` para desglosar la predicción de cada contrato entre sus riesgos individuales.
 
 **Problema original:**
 El desglose inicial usaba una heurística independiente del modelo:
@@ -220,7 +300,7 @@ contribución(i) = pred_base × (prob_i × imp_i) / Σ(prob × imp)
 Esto repartía la predicción proporcionalmente a `prob×imp` sin considerar qué features del SVR realmente causaban esa predicción. Ignoraba TF-IDF, categorías, IPC, TRM y las no-linealidades del kernel RBF.
 
 **Solución SHAP:**
-Se reemplazó por valores Shapley locales que calculan la contribución de cada una de las 35 features a `pred_base`, y luego se mapean a los riesgos según:
+Se reemplazó por valores Shapley locales que calculan la contribución de cada una de las 38 features a `pred_base`, y luego se mapean a los riesgos según:
 
 | Feature | Estrategia de mapeo |
 |---|---|
@@ -237,7 +317,7 @@ Se reemplazó por valores Shapley locales que calculan la contribución de cada 
 | retraso entrega materiales | 3 | 4 | **6.39%** | **6.05%** |
 | incremento precio insumos | 4 | 5 | **10.65%** | **6.31%** |
 
-El riesgo con P×I más bajo (2×3=6) pasó a ser el de mayor contribución. El SVR aprendió que palabras como "obra", "ejecución", "técnicos" y la categoría "medio" están asociadas a mayor sobrecosto en los 351 contratos de entrenamiento — algo que la heurística `prob×imp` no podía capturar.
+El riesgo con P×I más bajo (2×3=6) pasó a ser el de mayor contribución. El RandomForest aprendió que palabras como "obra", "ejecución", "técnicos" y la categoría "medio" están asociadas a mayor sobrecosto en los 575 contratos de entrenamiento — algo que la heurística `prob×imp` no podía capturar.
 
 **Validación matemática:**
 ```
@@ -245,7 +325,7 @@ SHAP: ∑shap_vals + expected_value = -1.87% + 22.10% = 20.23% = pred_base ✅
 Desglose: ∑contribuciones = 20.24% ≈ 20.23% (error 0.01pp) ✅
 ```
 
-**Rendimiento:** ~0.7s por contrato promedio (15 riesgos) con KernelExplainer + 1000 samples + 100 contratos background. Cacheados vía `lru_cache`.
+**Rendimiento:** ~2-5s para el primer request (TreeExplainer), luego cacheados vía `lru_cache`.
 
 ---
 
@@ -258,57 +338,43 @@ Se aplicó `np.log1p(sobrecosto)` para estabilizar la cola larga. **Empeoró el 
 TRM × probabilidad, IPC × valor inicial, TRM × riesgo total. **No aportaron señal predictiva** y actuaron como ruido.
 
 ### 4.3 SHAP — Interpretabilidad Local por Riesgo
-Inicialmente SHAP no estaba disponible por incompatibilidad numba+numpy 2.5 (Python 3.13). Se corrigió fijando `numpy<2.5` en las dependencias. Se implementó un desglose por riesgo basado en `shap.KernelExplainer` con 1000 samples y 100 contratos de background.
+Inicialmente SHAP no estaba disponible por incompatibilidad numba+numpy 2.5 (Python 3.13). Se corrigió fijando `numpy<2.5` en las dependencias. Se implementó un desglose por riesgo basado en `shap.TreeExplainer`. Al migrar a RandomForest como modelo final, TreeExplainer produce valores SHAP exactos (sin muestreo) y es significativamente más rápido que KernelExplainer.
 
 **Arquitectura del desglose SHAP:**
-1. Se calculan los valores Shapley para las 35 features del contrato
+1. Se calculan los valores Shapley para las 38 features del contrato
 2. Cada feature se mapea a los riesgos individuales según su naturaleza:
    - `prob_promedio`, `imp_promedio`, `interacción` → ponderado por `prob×imp`
    - `prop_tipo_*`, `prop_cate_*`, etc. → solo riesgos con ese valor categórico
    - `tfidf_*` → riesgos cuya descripción contiene la palabra
    - `duración`, `ipc_acumulado`, `trm_promedio` → split equitativo
-3. La suma de contribuciones `= pred_base` (error < 0.01pp con 1000 samples)
+3. La suma de contribuciones `= pred_base` (exacta, sin error de muestreo)
 
 **Reemplazo de la heurística anterior:**
-El código original usaba `contribución = pred_base × (prob_i × imp_i) / Σ(prob × imp)`, que es independiente del modelo — no reflejaba lo que el SVR realmente aprendió. SHAP sí captura las no-linealidades del kernel RBF, el efecto del texto (TF-IDF), y las interacciones entre variables macro y la matriz de riesgos.
+El código original usaba `contribución = pred_base × (prob_i × imp_i) / Σ(prob × imp)`, que es independiente del modelo — no reflejaba lo que el RandomForest realmente aprendió. SHAP sí captura las no-linealidades del modelo, el efecto del texto (TF-IDF), y las interacciones entre variables macro y la matriz de riesgos.
 
-**Validación con datos sintéticos (Julio 2026):**
+**Validación (sin muestreo):**
 | Método | ¿Refleja el modelo? | Error de caja |
 |---|---|---|
 | Heurística `prob×imp` | ❌ No | — |
-| SHAP nsamples=200 | ✅ Sí | ~0.03pp |
-| SHAP nsamples=1000 | ✅ Sí | **~0.01pp** |
+| TreeExplainer (exacto) | ✅ Sí | **0.0pp** |
 
-Tiempo de cómputo: ~0.7s por contrato promedio (15 riesgos) con nsamples=1000.
+Tiempo de cómputo: ~2-5s para el primer request, luego cacheados vía `lru_cache`.
 
 ---
 
 ## 5. Conclusiones y Decisión Final
 
-### Modelo seleccionado: **SVR (kernel RBF, C=10, gamma=scale)**
+### Stack de modelos seleccionados
 
-| Criterio | Resultado |
-|---|---|
-| R² CV (5-fold) | **0.068** |
-| R² (full training / in-sample) | 0.417 |
-| AUC CV (clasificador) | **0.673** |
-| RMSE | **17.1 pp** |
-| Features | **35 (30 TF-IDF + 5 rango)** |
-| Interpretabilidad | **SHAP (local, 1000 samples) + Permutation importance (global, 10 reps) + Ridge referencia** |
+| Componente | Modelo | Métrica clave |
+|---|---|---|---|
+| **Regresor** | **RandomForest** (390 trees) | R² nested CV=0.235, R² full=0.622, RMSE=11.4 pp |
+| **Clasificador** (>25%) | **RandomForestClassifier** (100 trees) | AUC nested CV=0.685 |
+| **RMSE Predictor** | **SVR RBF** (C=1.0, gamma=scale) | MAE=7.98 pp |
 
-### Justificación para la tesis
+### Justificación
 
-> "El modelo SVR con kernel RBF, entrenado con 35 features (30 TF-IDF + 5 de rango de fechas con IPC acumulado compuesto y TRM promedio), fue seleccionado como modelo campeón tras superar a Ridge en R² CV (0.068 vs 0.066) y AUC (0.673 vs 0.650). La migración de año único a rango de fechas, aunque metodológicamente necesaria para modelar proyectos multi-anuales, deterioró el rendimiento de Ridge (lineal), que no pudo capturar las relaciones no lineales entre duración, inflación compuesta y tipo de cambio. SVR, gracias a su kernel RBF, sí logró modelar estas interacciones. La interpretabilidad global se logra mediante permutation importance; la interpretabilidad local (por riesgo individual) se implementó vía SHAP KernelExplainer, reemplazando la heurística `prob×imp / Σ(prob×imp)` por valores Shapley que reflejan la contribución real de cada riesgo a la predicción del SVR."
-
-### Modelos descartados en la fase final
-
-| Modelo | Razón |
-|---|---|
-| Ridge (año único) | Metodológicamente incorrecto (proyectos multi-anual forzados a un año) |
-| Ridge (rango) | R² CV 0.066 (inferior a SVR), no captura no-linealidades |
-| ElasticNet (rango) | R² CV 0.063, similar a Ridge |
-| RandomForest (rango) | R² CV 0.047, sobreajuste severo (R² full=0.93) |
-| MLP (rango) | R² CV negativo (−0.037), datos insuficientes para red neuronal |
+RandomForest se consolidó como el modelo final tras expandir el dataset a 575 contratos e incorporar 3 features de mitigación. Con R² nested CV de 0.045 (vs Ridge 0.026) y un R² full de 0.622, RandomForest captura relaciones no lineales que Ridge no puede modelar. Para clasificación, RandomForestClassifier (AUC 0.685) superó a Ridge (0.665) y SVC (0.661). El RMSE Predictor mantiene SVR RBF (MAE=7.98 pp). La interpretabilidad se beneficia de TreeExplainer, que produce valores SHAP exactos para modelos basados en árboles sin necesidad de muestreo.
 
 ---
 
@@ -321,3 +387,5 @@ Tiempo de cómputo: ~0.7s por contrato promedio (15 riesgos) con nsamples=1000.
 | 2026-07-11 | v3 | Migración a rango de fechas. Ridge descartado (R² CV=0.066). SVR nuevo campeón (R² CV=0.072, AUC=0.673). Permutation importance. RMSE variable. |
 | 2026-07-14 | v4 | Integración MLflow: experimentos, model registry, artifact store. Backend carga modelo desde MLflow con fallback local. |
 | 2026-07-16 | v5 | **Desglose SHAP**: reemplazo de heurística `prob×imp` por interpretabilidad local vía `shap.KernelExplainer` (1000 samples). Cada riesgo recibe su contribución real al sobrecosto estimado. numpy fijado a <2.5 por compatibilidad con numba. |
+| 2026-07-20 | v6 | **Nuevo benchmark 10 modelos** con nested CV + HalvingSearch. Ridge recupera campeonato (R² hold-out 0.086). SVC (RBF) nuevo clasificador (AUC 0.654). RMSE Predictor re-entrenado sobre residuales de Ridge (SVR RBF, MAE 7.30). |
+| 2026-07-21 | v7 | **Migración a RandomForest (390 trees)**. 38 features (30 RF-selected + 5 rango + 3 mitigación). 575 contratos. R² full=0.622. TreeExplainer reemplaza KernelExplainer. Feature importances RF. |

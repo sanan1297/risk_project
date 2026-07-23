@@ -1,0 +1,13 @@
+﻿id_contrato,descripcion_riesgo,probabilidad,impacto,tipo,categoria,plan_mitigacion
+C-001,dano o deterioro de viviendas u obras publicas por accion y omision del contratista.,3,5,operacional,alto,el contratista debera tomar medidas de prevencion en metodos constructivos con el fin de garantizar la estabilidad de la infraestructura
+C-001,"perjuicios o danos derivados de las actuaciones, hechos u omisiones de los contratistas o subcontratistas hacia terceros afectados",2,4,operacional,alto,acompanamiento y supervision del contrato
+C-001,deficiente gestion de calidad en la obra: incumplimiento en los estandares de calidad.,2,3,operacional,alto,supervision y control de calidad por parte del interventor y supervisor
+C-001,incumplimiento por parte del contratista en la ejecucion del contrato,2,4,operacional,alto,establecer garantia de cumplimiento a ejecucion del contrato
+C-001,reclamaciones de las obras por parte de las afectaciones generadas a terceros,2,3,operacional,medio,acompanamiento y supervision del contrato
+C-001,contratista con experiencia inapropiada para la ejecucion del contrato,2,3,operacional,medio,solicitar la experiencia adecuada con la necesidad a satisfacer por parte de la entidad en los estudios y documentos previos
+C-001,terminacion anticipada del contrato por incumplimiento del contratista,2,4,operacional,alto,establecer garantia de cumplimiento a ejecucion del contrato
+C-001,"reparacion, mantenimiento y reparacion de obras",2,3,operacional,medio,"el contratista debera velar por el mantenimiento y la estabilidad de la obra y la reparacion del suelo, y cualquier otra accion que en el periodo de ejecucion este asumido por el contratista."
+C-001,estimacion no adecuada de la remuneracion del personal,2,4,economico,alto,calcular los costos con la fija y salarios reales
+C-001,demora en la entrega por parte del contratista de documentos para el inicio de los pagos,2,2,economico,bajo,el contratista debera presentar oportunamente la documentacion requerida para los pagos
+C-001,cambios en la intervencion y el orden publico que afecten el desarrollo del proyecto,2,4,social,alto,intervencion oportuna por parte del gobierno para minimizar el impacto sobre el desarrollo del proyecto
+C-001,dificultad de acceso al lugar de ejecucion del contrato generada por condiciones climaticas,2,4,naturaleza,alto,estudiar las condiciones climaticas a traves de registros historicos y prediccion de las entidades competentes (y establecer plan de choque ante eventuales suspensiones)

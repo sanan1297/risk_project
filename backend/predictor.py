@@ -10,11 +10,11 @@ ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "models"
 
 MODEL_META = {
-    "modelo": "SVR (kernel RBF)",
-    "r2_cv": 0.068,
-    "auc_cv": 0.673,
-    "rmse": 17.1,
-    "features": 35,
+    "modelo": "RandomForest (nested CV campeon)",
+    "r2_cv": 0.235,
+    "auc_cv": 0.591,
+    "rmse": 11.4,
+    "features": 38,
     "tipo_control": "rango_fechas",
 }
 

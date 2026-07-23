@@ -1,0 +1,16 @@
+﻿id_contrato,descripcion_riesgo,probabilidad,impacto,tipo,categoria,plan_mitigacion
+C-128,planos o disenos que conducen a fallas estructurales o mayor permanencia en obra,2,5,operacional,alto,verificacion de los disenos aportados por el municipio
+C-128,estimacion inadecuada de los costos,3,4,operacional,alto,verificacion de los apu por parte del interventor
+C-128,entrega tardia de predios,1,2,operacional,bajo,verificacion del estado de los predios antes de la iniciacion del proceso
+C-128,disponibilidad de materiales,3,2,operacional,medio,realizar compras preliminares de materiales
+C-128,materiales defectuosos,3,2,operacional,bajo,solicitar certificacion de calidad de los materiales
+C-128,especificaciones incorrectas de materiales,3,2,operacional,bajo,verificacion de las especificaciones de los diferentes materiales plasmados en los planos
+C-128,insuficiencia de personal,3,2,operacional,medio,verificar el personal requerido para las diferentes actividades a ejecutar en obra y asi garantizar los rendimientos en el analisis de precios unitarios
+C-128,financiamiento del contrato,3,2,operacional,medio,verificar la correcta inversion del anticipo asi como la capacidad financiera del contratista
+C-128,incremento en impuestos que afecten a todos los contribuyentes,1,2,financiero,bajo,restablecimiento del equilibrio economico hasta llegar al punto de no perdida
+C-128,variaciones en el costo de los materiales,2,2,economico,bajo,verificacion de los apu para descartar precios artificialmente bajos
+C-128,mora en el pago por parte de la entidad,2,2,operacional,bajo,realizar los pagos acorde a las actas parciales presentadas por el contratista y avaladas por el interventor
+C-128,modificaciones o interpretaciones unilaterales al contrato,2,2,regulatorio,bajo,verificacion de cada una de las clausulas contempladas en el contrato
+C-128,retraso de actividades debido a catastrofes naturales y/o olas invernales,4,2,naturaleza,alto,realizar actividades que se puedan ejecutar en epoca de lluvia
+C-128,manifestaciones populares,1,2,operacional,bajo,desbloqueo de vias con apoyo del esmad y policia nacional
+C-128,insuficiencia de mano de obra calificada o de profesionales especializados,3,2,operacional,medio,contratar personal previo a firmas de actas de inicio. garantizar la permanencia del personal ofrecido.

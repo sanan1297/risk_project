@@ -101,6 +101,21 @@ def _aggregate_basic_stats(df: pd.DataFrame) -> pd.DataFrame:
         row["suma_valoracion"] = g["valoracion"].sum() if "valoracion" in g.columns else 0
         for cat in ["bajo", "medio", "alto", "extremo", "no especificado"]:
             row[f"n_categoria_{cat}"] = (g["categoria"] == cat).sum()
+
+        # Mitigation plan features
+        if "plan_mitigacion" in g.columns:
+            pm = g["plan_mitigacion"].astype(str).str.strip().replace("nan", "")
+            has_pm = pm.ne("")
+            row["pct_riesgos_con_mitigacion"] = has_pm.mean()
+            non_empty = pm[has_pm]
+            row["avg_longitud_mitigacion"] = non_empty.str.len().mean() if len(non_empty) > 0 else 0
+            codes = non_empty[non_empty.str.len() < 30]
+            row["n_distinct_codes_mitigacion"] = codes.nunique()
+        else:
+            row["pct_riesgos_con_mitigacion"] = 0.0
+            row["avg_longitud_mitigacion"] = 0.0
+            row["n_distinct_codes_mitigacion"] = 0.0
+
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -148,7 +163,7 @@ def aggregate_risks(
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().replace("nan", "no especificado")
 
-    FEATURES_35 = _load_features()
+    feature_names_target = _load_features()
 
     out = _aggregate_basic_stats(df)
 
@@ -169,10 +184,10 @@ def aggregate_risks(
         if c.startswith("prop_") or c.startswith("tfidf_"):
             out[c] = out[c].fillna(0.0)
 
-    missing = [c for c in FEATURES_35 if c not in out.columns]
+    missing = [c for c in feature_names_target if c not in out.columns]
     if missing:
         out = out.assign(**{c: 0.0 for c in missing})
 
-    keep = list(dict.fromkeys(FEATURES_35 + ["id_contrato", "n_riesgos"]))
+    keep = list(dict.fromkeys(feature_names_target + ["id_contrato", "n_riesgos"]))
     keep = [c for c in keep if c in out.columns]
     return out[keep]
